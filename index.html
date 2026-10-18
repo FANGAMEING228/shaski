@@ -53,12 +53,44 @@
   }
 
   /* ---------- боковое меню ---------- */
-  #menuToggle {
-    position: absolute; top: 12px; left: 12px; z-index: 30; width: 44px; height: 44px;
-    border-radius: 12px; border: 1px solid var(--line); background: var(--panel);
-    color: #fff; font-size: 22px; cursor: pointer;
+  /* ---------- боковые кнопки с картинками ---------- */
+  .dock {
+    position: absolute; top: 50%; transform: translateY(-50%); z-index: 12;
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
   }
-  body.menu-open #menuToggle { display: none; }
+  #dockL { left: 12px; } #dockR { right: 12px; }
+  body.menu-open .dock { display: none; }
+  .dbtn {
+    width: 66px; padding: 7px 4px 6px; border-radius: 16px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--panel); color: #fff;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    font: inherit; font-size: 11px; line-height: 1.1; backdrop-filter: blur(4px);
+    box-shadow: 0 4px 14px rgba(0,0,0,.35);
+  }
+  .dbtn svg { width: 36px; height: 36px; display: block; border-radius: 8px; }
+  .dbtn:hover { border-color: #ff8a8a; }
+  .dbtn:active { transform: scale(.94); }
+  .dspd { text-align: center; font-size: 24px; font-weight: 700; line-height: 1; color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,.7); }
+  .dspd small { display: block; margin-top: 2px; font-size: 11px; font-weight: 400; opacity: .75; }
+
+  /* ---------- картинки в меню ---------- */
+  #menu .hero { width: 100%; height: auto; display: block; margin: 0 0 12px; border-radius: 12px; }
+  #menu .lbl { font-size: 14px; margin: 0 0 6px; }
+  .seg.pics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .seg.pics.two { grid-template-columns: repeat(2, 1fr); }
+  .seg.pics button { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 7px 4px; font-size: 12px; line-height: 1.2; }
+  .seg.pics button svg { width: 100%; max-width: 62px; height: auto; border-radius: 8px; }
+  .seg.pics.two button svg { max-width: 84px; }
+  .pcard { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 8px 12px; margin-bottom: 8px; }
+  .pcard svg { width: 54px; height: 54px; flex: none; border-radius: 8px; }
+  .pcard span { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--dim); }
+  .pcard b { font-size: 16px; color: #fff; }
+  .btn.ico::before { content: ''; display: inline-block; width: 20px; height: 20px; margin-right: 8px; vertical-align: -4px; background: var(--ic) center / contain no-repeat; }
+  #startBtn, #resumeBtn { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='white' d='M7 4l13 8-13 8z'/%3E%3C/svg%3E"); }
+  #hostBtn { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M3 12h18M12 3c3.5 3.5 3.5 14.5 0 18M12 3c-3.5 3.5-3.5 14.5 0 18'/%3E%3C/svg%3E"); }
+  #joinBtn { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12h11M10 7l5 5-5 5'/%3E%3Cpath d='M15 4h5v16h-5'/%3E%3C/svg%3E"); }
+  #leaveBtn { --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 4H4v16h6'/%3E%3Cpath d='M9 12h11M16 7l5 5-5 5'/%3E%3C/svg%3E"); }
+  #touchCtrls button svg { width: 38px; height: 38px; }
   #menu {
     position: absolute; top: 0; left: 0; bottom: 0; width: 340px; max-width: 92vw;
     padding: 18px 18px 26px; overflow-y: auto; z-index: 20;
@@ -110,8 +142,29 @@
   #touchCtrls .mid button { width: 52px; height: 52px; font-size: 22px; }
   @media (max-width: 820px), (pointer: coarse) {
     #touchCtrls { display: flex; }
-    #bottomRight .keys { display: none; }
+    #bottomRight { display: none; }
   }
+
+  /* ---------- admin ---------- */
+  #adminBtn {
+    position: absolute; top: 12px; left: 12px; z-index: 25;
+    background: linear-gradient(180deg,#ff5f5f,#e83030); color: #fff; border: none;
+    border-radius: 10px; padding: 8px 12px; font-size: 13px; font-weight: 700; cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0,0,0,.4);
+  }
+  #adminPanel {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 340px; max-width: 92vw; z-index: 30; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 14px; padding: 18px;
+    backdrop-filter: blur(6px); box-shadow: 0 10px 40px rgba(0,0,0,.6);
+  }
+  #adminPanel h2 { margin: 0 0 4px; font-size: 18px; }
+  #adminPanel .tag { color: var(--dim); font-size: 12px; margin: 0 0 14px; }
+  #adminPanel .row { display: flex; align-items: center; justify-content: space-between; margin: 6px 0; font-size: 13px; }
+  #adminPanel input[type=range] { width: 100%; accent-color: var(--acc); margin: 4px 0 2px; }
+  #adminPanel label { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+  #adminPanel b { color: #ffd76b; }
+  #adminPanel .actions { margin-top: 16px; }
 </style>
 </head>
 <body>
@@ -135,27 +188,78 @@
   </div>
 
   <div id="touchCtrls">
-    <button id="btnLeft">◀</button>
-    <div class="mid"><button id="btnSpdUp">＋</button><button id="btnSpdDn">－</button></div>
-    <button id="btnRight">▶</button>
+    <button id="btnLeft" aria-label="Влево"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4l-8 8 8 8"/></svg></button>
+    <button id="btnRight" aria-label="Вправо"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4l8 8-8 8"/></svg></button>
   </div>
 
-  <button id="menuToggle" title="Меню (Esc)">☰</button>
+  <div class="dock" id="dockL">
+    <button class="dbtn" id="menuToggle" title="Меню (Esc)">
+      <svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#2b2f4a"/><path d="M7 10h18M7 16h18M7 22h18" stroke="#fff" stroke-width="3" stroke-linecap="round" fill="none"/></svg>
+      <span>Меню</span>
+    </button>
+    <button class="dbtn" id="btnView" title="Вид (V)"></button>
+  </div>
+  <div class="dock" id="dockR">
+    <button class="dbtn" id="btnSpdUp" title="Скорость +10 (E)">
+      <svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#23304a"/><path d="M5 23a11 11 0 1 1 22 0" fill="none" stroke="#dfe5ff" stroke-width="2.4" stroke-linecap="round"/><path d="M16 23l5-8" stroke="#ff5f5f" stroke-width="2.6" stroke-linecap="round"/><circle cx="16" cy="23" r="2" fill="#fff"/><path d="M24 4v7M20.5 7.5h7" stroke="#7ee787" stroke-width="2.4" stroke-linecap="round"/></svg>
+      <span>+10</span>
+    </button>
+    <div class="dspd"><span id="dockSpd">90</span><small>км/ч</small></div>
+    <button class="dbtn" id="btnSpdDn" title="Скорость −10 (Q)">
+      <svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#23304a"/><path d="M5 23a11 11 0 1 1 22 0" fill="none" stroke="#dfe5ff" stroke-width="2.4" stroke-linecap="round"/><path d="M16 23l-5-8" stroke="#ff5f5f" stroke-width="2.6" stroke-linecap="round"/><circle cx="16" cy="23" r="2" fill="#fff"/><path d="M20.5 7.5h7" stroke="#ff9b9b" stroke-width="2.4" stroke-linecap="round"/></svg>
+      <span>−10</span>
+    </button>
+  </div>
+
+  <!-- ---------- ADMIN ---------- -->
+  <button id="adminBtn" class="hidden" title="Admin панель">⚙ Admin</button>
+  <aside id="adminPanel" class="hidden">
+    <h2>🛠 Admin панель</h2>
+    <div class="tag">разблокировано кодом 1677</div>
+
+    <div class="row"><span>Макс. скорость трассы</span></div>
+    <input type="range" id="adminMaxSpeed" min="60" max="500" step="10" value="187">
+    <div class="row"><span>Лимит</span><b id="adminMaxSpeedVal">187 км/ч</b></div>
+
+    <div class="row" style="margin-top:12px"><span>Скорость машины сейчас</span></div>
+    <input type="range" id="adminSetSpeed" min="0" max="500" step="5" value="90">
+    <div class="row"><span>Значение</span><b id="adminSetSpeedVal">90 км/ч</b></div>
+    <button class="btn full" id="adminApplySpeed">Установить скорость игроку</button>
+
+    <div class="row" style="margin-top:14px">
+      <label><input type="checkbox" id="adminGod"> Бессмертие (god mode)</label>
+    </div>
+
+    <div class="actions">
+      <button class="btn primary full" id="adminClose">Закрыть</button>
+    </div>
+  </aside>
 
   <aside id="menu">
     <h1>🚗 Lanos Simulator</h1>
+    <svg class="hero" viewBox="0 0 320 90" aria-hidden="true">
+      <defs><linearGradient id="heroSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b2a4a"/><stop offset="1" stop-color="#e0a46a"/></linearGradient></defs>
+      <rect width="320" height="90" rx="12" fill="url(#heroSky)"/>
+      <circle cx="262" cy="52" r="17" fill="#ffd98a"/>
+      <path d="M0 66h320v14a10 10 0 0 1-10 10H10A10 10 0 0 1 0 80z" fill="#3a3b44"/>
+      <path d="M0 78h320" stroke="#fff" stroke-width="2" stroke-dasharray="18 14"/>
+      <path d="M82 66V54q0-4 6-5l20-3 14-13q2-2 6-2h30q4 0 7 3l11 12 20 3q6 1 6 6v11z" fill="#d23a2e"/>
+      <path d="M114 46l12-10h15v10zM145 46V36h14l10 10z" fill="#bfe0ff"/>
+      <circle cx="110" cy="66" r="10" fill="#111"/><circle cx="110" cy="66" r="4" fill="#9aa3c7"/>
+      <circle cx="176" cy="66" r="10" fill="#111"/><circle cx="176" cy="66" r="4" fill="#9aa3c7"/>
+      <rect x="198" y="52" width="5" height="4" rx="1" fill="#fff3b0"/>
+    </svg>
     <div class="tag">бесконечное шоссе</div>
     <div id="overStats"></div>
 
     <section>
       <h3>Трасса</h3>
-      <div class="row"><span>Полос</span>
-        <div class="seg" id="laneSeg">
-          <button data-v="3">3</button><button data-v="4">4</button><button data-v="5">5</button><button data-v="6">6</button>
-        </div>
+      <div class="lbl">Полос</div>
+      <div class="seg pics" id="laneSeg">
+        <button data-v="3"></button><button data-v="4"></button><button data-v="5"></button><button data-v="6"></button>
       </div>
-      <div class="row"><span>Трафик</span><button class="btn" id="trafficBtn"></button></div>
-      <div class="row"><span>Грузовики</span><button class="btn" id="trucksBtn"></button></div>
+      <button class="btn pcard" id="trafficBtn" style="margin-top:10px"></button>
+      <button class="btn pcard" id="trucksBtn"></button>
       <div class="hint" id="trackHint"></div>
     </section>
 
@@ -168,7 +272,7 @@
 
     <section>
       <h3>Вид</h3>
-      <div class="seg" id="viewSeg">
+      <div class="seg pics two" id="viewSeg">
         <button data-v="third">От 3-го лица</button><button data-v="first">От 1-го лица</button>
       </div>
     </section>
@@ -182,19 +286,19 @@
     <section>
       <h3>Мультиплеер (P2P)</h3>
       <input type="text" id="nameInput" maxlength="16" placeholder="Ник">
-      <div class="row" style="margin-top:10px"><button class="btn full" id="hostBtn">Создать комнату</button></div>
+      <div class="row" style="margin-top:10px"><button class="btn full ico" id="hostBtn">Создать комнату</button></div>
       <div class="row">
         <input type="text" id="codeInput" maxlength="5" placeholder="КОД">
-        <button class="btn" id="joinBtn">Войти</button>
+        <button class="btn ico" id="joinBtn">Войти</button>
       </div>
       <div id="netStatus"></div>
-      <button class="btn full hidden" id="leaveBtn">Выйти из комнаты</button>
+      <button class="btn full hidden ico" id="leaveBtn">Выйти из комнаты</button>
       <div class="hint">Хозяин задаёт трассу и запускает игру для всех. Игроки видят друг друга и общий трафик.</div>
     </section>
 
     <div class="actions">
-      <button class="btn primary full" id="startBtn">Начать</button>
-      <button class="btn full hidden" id="resumeBtn">Продолжить</button>
+      <button class="btn primary full ico" id="startBtn">Начать</button>
+      <button class="btn full hidden ico" id="resumeBtn">Продолжить</button>
     </div>
   </aside>
 </div>
@@ -206,7 +310,8 @@
 'use strict';
 // ======================= ЯДРО: константы, физика, трафик =======================
 const LANE_W = 3.6, SHOULDER = 2.6, MEDIAN = 5;
-const AHEAD = 420, BEHIND = 170, VMAX = 52;
+const AHEAD = 420, BEHIND = 170;
+let VMAX = 52; // admin-настраиваемый максимум скорости (м/с)
 const TRAFFIC_LEVELS = [
   { name: 'Мало', perKm: 7 }, { name: 'Нормально', perKm: 15 },
   { name: 'Много', perKm: 27 }, { name: 'Хаос', perKm: 45 },
@@ -1028,7 +1133,7 @@ const $ = id => document.getElementById(id);
 const el = {};
 ['scoreVal', 'subVal', 'playersList', 'gauge', 'netBadge', 'flash', 'gamepadStatus', 'overStats', 'laneSeg', 'trafficBtn', 'trucksBtn',
  'trackHint', 'speedRange', 'speedLabel', 'viewSeg', 'inputSelect', 'inputHint', 'nameInput', 'hostBtn', 'codeInput', 'joinBtn',
- 'leaveBtn', 'netStatus', 'startBtn', 'resumeBtn', 'menuToggle', 'btnLeft', 'btnRight', 'btnSpdUp', 'btnSpdDn'].forEach(id => { el[id] = $(id); });
+ 'leaveBtn', 'netStatus', 'startBtn', 'resumeBtn', 'menuToggle', 'btnLeft', 'btnRight', 'btnSpdUp', 'btnSpdDn', 'btnView', 'dockSpd'].forEach(id => { el[id] = $(id); });
 
 // ---------- сохранённые настройки ----------
 const CFG_KEY = 'lanos_cfg_v2', BEST_KEY = 'lanos_best';
@@ -1081,7 +1186,8 @@ el.btnSpdUp.addEventListener('click', () => adjustSpeed(10));
 el.btnSpdDn.addEventListener('click', () => adjustSpeed(-10));
 
 function adjustSpeed(d) {
-  cfg.targetKmh = clamp(Math.round((cfg.targetKmh + d) / 5) * 5, 20, 180);
+  const maxK = +el.speedRange.max || 180;
+  cfg.targetKmh = clamp(Math.round((cfg.targetKmh + d) / 5) * 5, 20, maxK);
   el.speedRange.value = cfg.targetKmh;
   el.speedLabel.textContent = cfg.targetKmh + ' км/ч';
   saveCfg();
@@ -1182,7 +1288,8 @@ function gearRpm(kmh) {
   return { gear: g, rpm: clamp(1000 + ((kmh - low) / (top - low)) * 4800, 800, 6500) };
 }
 function drawGauge(kmh, targetKmh) {
-  const S = 460, c = S / 2, R = 200, MAXK = 240;
+  const S = 460, c = S / 2, R = 200;
+  const MAXK = Math.max(240, Math.ceil((VMAX * 3.6 + 40) / 20) * 20);
   const a0 = Math.PI * 0.75, a1 = Math.PI * 2.25;
   const ang = k => a0 + (a1 - a0) * clamp(k / MAXK, 0, 1);
   const g = gctx;
@@ -1190,17 +1297,18 @@ function drawGauge(kmh, targetKmh) {
   g.beginPath(); g.arc(c, c, R + 16, 0, Math.PI * 2);
   g.fillStyle = 'rgba(10,12,20,.8)'; g.fill();
   g.lineWidth = 3; g.strokeStyle = 'rgba(255,255,255,.28)'; g.stroke();
-  g.beginPath(); g.arc(c, c, R - 6, ang(180), ang(MAXK));
+  g.beginPath(); g.arc(c, c, R - 6, ang(MAXK * 0.75), ang(MAXK));
   g.lineWidth = 10; g.strokeStyle = '#ff4a4a'; g.stroke();
   g.font = 'bold 22px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  for (let k = 0; k <= MAXK; k += 10) {
-    const a = ang(k), major = k % 20 === 0;
+  const step = MAXK > 300 ? 20 : 10;
+  for (let k = 0; k <= MAXK; k += step) {
+    const a = ang(k), major = k % (step * 2) === 0;
     const r1 = R - (major ? 26 : 16), r2_ = R - 2;
     g.beginPath();
     g.moveTo(c + Math.cos(a) * r1, c + Math.sin(a) * r1);
     g.lineTo(c + Math.cos(a) * r2_, c + Math.sin(a) * r2_);
-    g.lineWidth = major ? 3 : 1.5; g.strokeStyle = k >= 180 ? '#ff7a7a' : '#dfe5ff'; g.stroke();
-    if (major && k % 40 === 0) { g.fillStyle = '#dfe5ff'; g.fillText(String(k), c + Math.cos(a) * (R - 50), c + Math.sin(a) * (R - 50)); }
+    g.lineWidth = major ? 3 : 1.5; g.strokeStyle = k >= MAXK * 0.75 ? '#ff7a7a' : '#dfe5ff'; g.stroke();
+    if (major && k % (step * 4) === 0) { g.fillStyle = '#dfe5ff'; g.fillText(String(k), c + Math.cos(a) * (R - 50), c + Math.sin(a) * (R - 50)); }
   }
   const ta = ang(targetKmh);            // метка выбранной скорости
   g.save(); g.translate(c, c); g.rotate(ta);
@@ -1223,10 +1331,54 @@ function drawGauge(kmh, targetKmh) {
 }
 
 // ---------- меню ----------
+// ---------- картинки для кнопок (inline SVG, без внешних файлов) ----------
+function roadSvg(n, inner) {
+  let s = '<svg viewBox="0 0 64 64"><rect width="64" height="64" fill="#2f5d2c"/><rect x="6" width="52" height="64" fill="#3a3b44"/>' +
+    '<rect x="6" width="2" height="64" fill="#f2f2f2"/><rect x="56" width="2" height="64" fill="#f2f2f2"/>';
+  const w = 48 / n;
+  for (let i = 1; i < n; i++) s += '<line x1="' + (8 + i * w) + '" y1="0" x2="' + (8 + i * w) + '" y2="64" stroke="#fff" stroke-width="1.4" stroke-dasharray="6 5"/>';
+  return s + inner + '</svg>';
+}
+function carSvg(lane, y, n, color) {
+  const w = 48 / n, x = 8 + lane * w + w / 2, cw = Math.min(10, w * 0.62), ch = cw * 1.9;
+  return '<rect x="' + (x - cw / 2) + '" y="' + y + '" width="' + cw + '" height="' + ch + '" rx="2.5" fill="' + color + '"/>' +
+    '<rect x="' + (x - cw * 0.34) + '" y="' + (y + ch * 0.26) + '" width="' + cw * 0.68 + '" height="' + ch * 0.28 + '" rx="1" fill="#bfe0ff"/>';
+}
+function truckSvg(lane, y, n) {
+  const w = 48 / n, x = 8 + lane * w + w / 2, tw = Math.min(11, w * 0.7);
+  return '<rect x="' + (x - tw / 2) + '" y="' + y + '" width="' + tw + '" height="' + tw * 0.9 + '" rx="2" fill="#2f6ea5"/>' +
+    '<rect x="' + (x - tw / 2) + '" y="' + (y + tw) + '" width="' + tw + '" height="' + tw * 2.4 + '" rx="1.5" fill="#eceff4"/>';
+}
+const laneIcon = n => roadSvg(n, carSvg(Math.floor(n / 2), 32, n, '#d23a2e'));
+const TRAFFIC_SLOTS = [[1, 23], [0, 2], [2, 44], [1, 44], [2, 23], [0, 23], [1, 2], [2, 2], [0, 44]];
+const TRAFFIC_COUNT = [2, 4, 6, 9];
+const SLOT_COLORS = ['#e84545', '#3aa0ff', '#f2c94c', '#7ee787', '#b47cff', '#ff9f45', '#e9e9e9', '#1f9d7a', '#d23a2e'];
+function trafficIcon(level) {
+  let s = '';
+  for (let i = 0; i < TRAFFIC_COUNT[level]; i++) s += carSvg(TRAFFIC_SLOTS[i][0], TRAFFIC_SLOTS[i][1], 3, SLOT_COLORS[i]);
+  return roadSvg(3, s);
+}
+const TRUCK_SLOTS = [[2, 4], [1, 26], [0, 10]];
+function trucksIcon(level) {
+  let s = '';
+  for (let i = 0; i < level; i++) s += truckSvg(TRUCK_SLOTS[i][0], TRUCK_SLOTS[i][1], 3);
+  if (level === 0) s += truckSvg(1, 14, 3) + '<circle cx="32" cy="32" r="22" fill="none" stroke="#ff5f5f" stroke-width="4"/><line x1="16" y1="48" x2="48" y2="16" stroke="#ff5f5f" stroke-width="4"/>';
+  return roadSvg(3, s);
+}
+function viewIcon(v) {
+  if (v === 'first') return '<svg viewBox="0 0 64 64"><rect width="64" height="64" fill="#bcd6f0"/><path d="M0 30h64v34H0z" fill="#4a8a3c"/><path d="M28 30h8l14 34H14z" fill="#3a3b44"/><path d="M32 32v32" stroke="#fff" stroke-width="1.5" stroke-dasharray="4 3"/><path d="M0 46Q32 36 64 46V64H0z" fill="#1b1d24"/><circle cx="32" cy="58" r="12" fill="none" stroke="#dfe5ff" stroke-width="3.5"/><path d="M20 58h24M32 58v10" stroke="#dfe5ff" stroke-width="3"/></svg>';
+  return '<svg viewBox="0 0 64 64"><rect width="64" height="64" fill="#bcd6f0"/><path d="M0 30h64v34H0z" fill="#4a8a3c"/><path d="M26 30h12l22 34H4z" fill="#3a3b44"/><path d="M32 32v32" stroke="#fff" stroke-width="1.5" stroke-dasharray="4 3"/><rect x="19" y="40" width="26" height="15" rx="4" fill="#d23a2e"/><rect x="23" y="42.5" width="18" height="6" rx="2" fill="#bfe0ff"/><rect x="20.5" y="50.5" width="6" height="3" rx="1" fill="#ff8a8a"/><rect x="37.5" y="50.5" width="6" height="3" rx="1" fill="#ff8a8a"/></svg>';
+}
+const VIEW_LABEL = { third: 'От 3-го лица', first: 'От 1-го лица' };
+function initPictures() {
+  [...el.laneSeg.children].forEach(b => { b.innerHTML = laneIcon(+b.dataset.v) + '<span>' + b.dataset.v + '</span>'; });
+  [...el.viewSeg.children].forEach(b => { b.innerHTML = viewIcon(b.dataset.v) + '<span>' + VIEW_LABEL[b.dataset.v] + '</span>'; });
+}
+
 const showTrack = src => {
   [...el.laneSeg.children].forEach(b => b.classList.toggle('on', +b.dataset.v === src.lanes));
-  el.trafficBtn.textContent = '🚗 ' + TRAFFIC_LEVELS[src.traffic].name;
-  el.trucksBtn.textContent = '🚚 ' + TRUCK_LEVELS[src.trucks].name;
+  el.trafficBtn.innerHTML = trafficIcon(src.traffic) + '<span>Трафик<b>' + TRAFFIC_LEVELS[src.traffic].name + '</b></span>';
+  el.trucksBtn.innerHTML = trucksIcon(src.trucks) + '<span>Грузовики<b>' + TRUCK_LEVELS[src.trucks].name + '</b></span>';
 };
 const realRun = () => app.running && !app.demo;
 const canResume = () => realRun() && app.P.alive;
@@ -1271,6 +1423,7 @@ el.menuToggle.addEventListener('click', openMenu);
 function setView(v) {
   cfg.view = v;
   [...el.viewSeg.children].forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  el.btnView.innerHTML = viewIcon(v) + '<span>' + (v === 'first' ? '1-е лицо' : '3-е лицо') + '</span>';
   saveCfg();
 }
 
@@ -1326,6 +1479,8 @@ el.trafficBtn.addEventListener('click', () => { cfg.traffic = (cfg.traffic + 1) 
 el.trucksBtn.addEventListener('click', () => { cfg.trucks = (cfg.trucks + 1) % TRUCK_LEVELS.length; saveCfg(); showTrack(cfg); restartDemoIfIdle(); });
 el.speedRange.addEventListener('input', () => { cfg.targetKmh = +el.speedRange.value; el.speedLabel.textContent = cfg.targetKmh + ' км/ч'; saveCfg(); });
 el.viewSeg.addEventListener('click', e => { const b = e.target.closest('button'); if (b) setView(b.dataset.v); });
+el.btnView.addEventListener('click', () => { setView(cfg.view === 'first' ? 'third' : 'first'); el.btnView.blur(); });
+[el.menuToggle, el.btnSpdUp, el.btnSpdDn].forEach(b => b.addEventListener('click', () => b.blur()));
 el.nameInput.addEventListener('input', () => { cfg.name = el.nameInput.value.slice(0, 16); saveCfg(); });
 el.hostBtn.addEventListener('click', () => Net.host());
 el.joinBtn.addEventListener('click', () => Net.join(el.codeInput.value));
@@ -1455,6 +1610,7 @@ function drawFrame(dt) {
   app.hudAcc += dt;
   if (app.hudAcc > 0.1) {
     app.hudAcc = 0;
+    el.dockSpd.textContent = cfg.targetKmh;
     if (app.demo) { el.scoreVal.textContent = ''; el.subVal.textContent = ''; }
     else {
       el.scoreVal.textContent = Math.floor((P.startZ - P.z) / 10) + P.overtakes * 25;
@@ -1476,10 +1632,83 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+// ======================= ADMIN ПАНЕЛЬ (код 1677) =======================
+const elAdmin = {
+  btn: $('adminBtn'), panel: $('adminPanel'),
+  maxSpeed: $('adminMaxSpeed'), maxSpeedVal: $('adminMaxSpeedVal'),
+  setSpeed: $('adminSetSpeed'), setSpeedVal: $('adminSetSpeedVal'),
+  applySpeed: $('adminApplySpeed'), god: $('adminGod'), close: $('adminClose'),
+};
+let adminCodeBuf = '', adminUnlocked = false;
+
+addEventListener('keydown', e => {
+  if (e.key >= '0' && e.key <= '9') {
+    adminCodeBuf = (adminCodeBuf + e.key).slice(-4);
+    if (adminCodeBuf === '1677') {
+      adminCodeBuf = '';
+      if (!adminUnlocked) {
+        adminUnlocked = true;
+        elAdmin.btn.classList.remove('hidden');
+      }
+      openAdmin();
+    }
+  }
+});
+
+function openAdmin() {
+  // синхронизируем значения со текущим состоянием перед показом
+  elAdmin.maxSpeed.value = Math.round(VMAX * 3.6);
+  elAdmin.maxSpeedVal.textContent = elAdmin.maxSpeed.value + ' км/ч';
+  elAdmin.setSpeed.max = elAdmin.maxSpeed.value;
+  if (app.P) {
+    elAdmin.setSpeed.value = Math.round(app.P.v * 3.6);
+    elAdmin.god.checked = app.P.immune > 1000;
+  }
+  elAdmin.setSpeedVal.textContent = elAdmin.setSpeed.value + ' км/ч';
+  elAdmin.panel.classList.remove('hidden');
+}
+function closeAdmin() { elAdmin.panel.classList.add('hidden'); }
+
+elAdmin.btn.addEventListener('click', openAdmin);
+elAdmin.close.addEventListener('click', closeAdmin);
+
+elAdmin.maxSpeed.addEventListener('input', () => {
+  const kmh = +elAdmin.maxSpeed.value;
+  elAdmin.maxSpeedVal.textContent = kmh + ' км/ч';
+  VMAX = kmh / 3.6;
+  el.speedRange.max = kmh;
+  elAdmin.setSpeed.max = kmh;
+  if (cfg.targetKmh > kmh) {
+    cfg.targetKmh = kmh;
+    el.speedRange.value = kmh;
+    el.speedLabel.textContent = kmh + ' км/ч';
+    saveCfg();
+  }
+  if (+elAdmin.setSpeed.value > kmh) { elAdmin.setSpeed.value = kmh; elAdmin.setSpeedVal.textContent = kmh + ' км/ч'; }
+});
+elAdmin.setSpeed.addEventListener('input', () => {
+  elAdmin.setSpeedVal.textContent = elAdmin.setSpeed.value + ' км/ч';
+});
+elAdmin.applySpeed.addEventListener('click', () => {
+  if (!app.P) return;
+  const v = +elAdmin.setSpeed.value / 3.6;
+  app.P.v = v;
+  app.P.target = v;
+  cfg.targetKmh = clamp(Math.round(+elAdmin.setSpeed.value / 5) * 5, 20, +el.speedRange.max || 180);
+  el.speedRange.value = cfg.targetKmh;
+  el.speedLabel.textContent = cfg.targetKmh + ' км/ч';
+  saveCfg();
+});
+elAdmin.god.addEventListener('change', () => {
+  if (!app.P) return;
+  app.P.immune = elAdmin.god.checked ? 1e9 : 2;
+});
+
 // ---------- старт приложения ----------
 el.nameInput.value = cfg.name;
 el.speedRange.value = cfg.targetKmh;
 el.speedLabel.textContent = cfg.targetKmh + ' км/ч';
+initPictures();
 setView(cfg.view);
 refreshDevices(true);
 document.body.classList.add('menu-open');
