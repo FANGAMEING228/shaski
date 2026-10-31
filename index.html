@@ -218,6 +218,10 @@
     </button>
     <button class="dbtn" id="btnView" title="Вид (V)"></button>
     <button class="dbtn" id="btnTod" title="День / ночь (N)"></button>
+    <button class="dbtn" id="btnBack" title="Смотреть назад (C)">
+      <svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#2b2f4a"/><path d="M9 11h10a5 5 0 0 1 0 10h-6" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><path d="M12 7l-4 4 4 4" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Назад</span>
+    </button>
     <button class="dbtn hidden" id="btnAdmin" title="Админ-меню">
       <svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#4a3a14"/><path d="M16 5l9 3v7c0 6-4 10-9 12-5-2-9-6-9-12V8z" fill="#ffb02e"/><path d="M12 16l3 3 6-6" stroke="#4a3a14" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span>Админ</span>
@@ -287,6 +291,12 @@
     </section>
 
     <section>
+      <h3>Транспорт</h3>
+      <div class="seg pics" id="vehSeg"></div>
+      <div class="hint" id="vehHint"></div>
+    </section>
+
+    <section>
       <h3>Окружение</h3>
       <div class="seg pics" id="todSeg"></div>
       <div class="row"><span>Цвет машины</span></div>
@@ -297,7 +307,7 @@
       <div class="row"><span>VR-шлем</span><button class="btn" id="vrBtn" disabled>VR недоступен</button></div>
       <div class="hint" id="vrHint">VR: стик — руль и скорость, курок — газ, хват — тормоз.</div>
       <div class="row"><span>Скриншот</span><button class="btn" id="photoBtn">📷 Сохранить</button></div>
-      <div class="hint">L — фары · N — день/ночь · H — сигнал</div>
+      <div class="hint">L — фары · N — день/ночь · H — сигнал · C (держать) — смотреть назад · мышь/палец — осмотреться (вид из салона)</div>
     </section>
 
     <section>
@@ -356,7 +366,20 @@ const KINDS = {
   truck: { len: 13.5, wid: 2.55, mass: 14000, A: 0.9 },
 };
 const PLAYER_DIM = { len: 4.2, wid: 1.76, mass: 1100 };
+const VEH = [
+  { id: 'lanos',   name: 'Daewoo Lanos',    short: 'Lanos',    len: 4.2,  wid: 1.76, mass: 1100, accel: 1.0,  vmax: 180, eye: [-0.38, 1.22, 0.15], cam: [3.7, 9.5] },
+  { id: 'vaz2107', name: 'ВАЗ 2107',        short: 'ВАЗ 2107', len: 4.15, wid: 1.66, mass: 1030, accel: 0.8,  vmax: 160, eye: [-0.38, 1.21, 0.15], cam: [3.7, 9.5] },
+  { id: 'm2105',   name: 'Москвич 2105 SL', short: 'Москвич',  len: 4.3,  wid: 1.64, mass: 1060, accel: 0.75, vmax: 150, eye: [-0.38, 1.24, 0.15],  cam: [3.8, 9.7] },
+  { id: 'moped',   name: 'Мопед',           short: 'Мопед',    len: 1.9,  wid: 0.8,  mass: 130,  accel: 0.6,  vmax: 70,  eye: [0, 1.46, 0.12],     cam: [2.9, 6.6] },
+];
+let VEH_I = 0, ACCEL = 1;
+function setVehicleSim(i) {
+  VEH_I = clamp(i | 0, 0, VEH.length - 1);
+  const v = VEH[VEH_I];
+  PLAYER_DIM.len = v.len; PLAYER_DIM.wid = v.wid; PLAYER_DIM.mass = v.mass; ACCEL = v.accel;
+}
 const CAR_COLORS = [0xe84545, 0x3aa0ff, 0xf2c94c, 0x7ee787, 0xb47cff, 0xff9f45, 0xe9e9e9, 0x2f3a4a, 0x1f9d7a];
+const CAR_MODELS = ['lanos', 'vaz2107', 'm2105'];
 const TRUCK_COLORS = [0xf2f2f2, 0xd0d5de, 0x3a6ea5, 0xc0392b, 0x2e8b57, 0xe0b030];
 
 const cfg  = { lanes: 4, traffic: 1, trucks: 1, view: 'third', targetKmh: 90, name: '' }; // выбор в меню
@@ -382,7 +405,7 @@ function newPlayer(z, v, lane) {
 }
 
 // ускорение двигателя (м/с²): падает к максимальной скорости
-const accelMax = v => Math.max(0, 3.1 * (1 - Math.pow(v / VMAX, 2.4)));
+const accelMax = v => Math.max(0, 3.1 * ACCEL * (1 - Math.pow(v / VMAX, 2.4)));
 
 function crashPlayer(P, severity) {
   if (!P.alive || P.god) return;
@@ -652,13 +675,15 @@ const Net = {
   getWelcome: () => ({}), hello: () => ({ name: 'Игрок' }),
 };
 
-function netAddRemote(id, name, color) {
+function netAddRemote(id, name, color, veh) {
+  veh = Number.isInteger(veh) && veh >= 0 && veh < VEH.length ? veh : 0;
+  const D = VEH[veh];
   const r = Net.remotes.get(id) || {
     id, x: 0, z: 0, v: 0, yaw: 0, steer: 0, alive: true, fresh: false,
     tx: 0, tz: 0, tv: 0, tyaw: 0, tt: performance.now(),
-    len: PLAYER_DIM.len, wid: PLAYER_DIM.wid, mass: PLAYER_DIM.mass,
+    len: D.len, wid: D.wid, mass: D.mass,
   };
-  r.name = name; r.color = color;
+  r.name = name; r.color = color; r.veh = veh; r.len = D.len; r.wid = D.wid; r.mass = D.mass;
   Net.remotes.set(id, r);
   return r;
 }
@@ -672,7 +697,7 @@ function netApplyState(r, a) {
 
 const netSend = (conn, msg) => { try { if (conn && conn.open) conn.send(msg); } catch (e) { /* канал закрыт */ } };
 Net.broadcast = (msg, except) => { for (const c of Net.conns.values()) if (c !== except) netSend(c, msg); };
-Net.playerList = () => [...Net.remotes.values()].map(r => ({ id: r.id, name: r.name, color: r.color }));
+Net.playerList = () => [...Net.remotes.values()].map(r => ({ id: r.id, name: r.name, color: r.color, veh: r.veh }));
 
 Net.leave = function (silent, msg) {
   const was = Net.role;
@@ -720,8 +745,8 @@ function netHostConn(conn) {
     if (m.t === 'hello') {
       const name = String(m.name || 'Игрок').slice(0, 16);
       const color = Number.isInteger(m.color) && m.color >= 0 && m.color <= 0xffffff ? m.color : CAR_COLORS[conn._pid % CAR_COLORS.length];
-      netAddRemote(conn._pid, name, color);
-      Net.broadcast({ t: 'join', id: conn._pid, name, color }, conn);
+      netAddRemote(conn._pid, name, color, m.veh);
+      Net.broadcast({ t: 'join', id: conn._pid, name, color, veh: Net.remotes.get(conn._pid).veh }, conn);
       Net.onPlayers();
     } else if (m.t === 'st') {
       const r = Net.remotes.get(conn._pid);
@@ -775,12 +800,12 @@ function netClientMsg(m) {
     case 'welcome':
       Net.myId = m.id; Net.myColor = m.color;
       Net.remotes.clear();
-      for (const p of m.players || []) if (p.id !== Net.myId) netAddRemote(p.id, p.name, p.color);
+      for (const p of m.players || []) if (p.id !== Net.myId) netAddRemote(p.id, p.name, p.color, p.veh);
       Net.onStatus('В комнате <b>' + Net.code + '</b>', 'ok');
       Net.onPlayers();
       Net.onWelcome(m);
       break;
-    case 'join': netAddRemote(m.id, m.name, m.color); Net.onPlayers(); break;
+    case 'join': netAddRemote(m.id, m.name, m.color, m.veh); Net.onPlayers(); break;
     case 'left': Net.remotes.delete(m.id); Net.onPlayers(); break;
     case 'start': Net.onStart(m); break;
     case 'snap':
@@ -950,6 +975,8 @@ function makeWheel(geo, spokes) {
 // opts: { player, lite } — lite = упрощённая машина для трафика (меньше вызовов отрисовки)
 function makeCarMesh(color, opts) {
   opts = opts || {};
+  if (opts.model === 'moped') return makeMopedMesh(color, opts);
+  if (opts.model && BOXY[opts.model]) return makeBoxyMesh(color, opts);
   const g = new THREE.Group();
   g.rotation.order = 'YXZ';
   const paint = paintFor(color);
@@ -993,6 +1020,146 @@ function makeCarMesh(color, opts) {
     const t = new THREE.Sprite(GLOW.tail); t.position.set(sx * 0.56, 0.74, 2.3); t.scale.set(1.9, 1.9, 1); g.add(t);
   }
   g.userData = { wheels, pivots, r: 0.33, rot: 0, tailMat: opts.player ? M.tailPlayer : null };
+  return g;
+}
+
+// ---------- балка между двумя точками ----------
+function barIn(parent, a, b, th, mat) {
+  const va = new THREE.Vector3(a[0], a[1], a[2]), vb = new THREE.Vector3(b[0], b[1], b[2]);
+  const d = vb.clone().sub(va);
+  const m = new THREE.Mesh(new THREE.BoxGeometry(th, th, d.length()), mat);
+  m.position.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), d.normalize());
+  parent.add(m);
+  return m;
+}
+
+// ---------- ВАЗ 2107 и Москвич 2105 SL: угловатые седаны ----------
+const BOXY = {};
+function boxyGeo(P) {
+  const prof = new THREE.Shape();
+  prof.moveTo(-P.L, 0.38); prof.lineTo(-P.L - 0.03, 0.68); prof.lineTo(-P.L + 0.03, P.deck - 0.03); prof.lineTo(-P.L + 0.1, P.deck);
+  prof.lineTo(P.cowl, P.hoodR); prof.lineTo(P.F - 0.08, P.hoodF);
+  prof.quadraticCurveTo(P.F, P.hoodF - 0.03, P.F, 0.7); prof.lineTo(P.F - 0.01, 0.4);
+  prof.lineTo(1.5, 0.32); prof.lineTo(-1.5, 0.32); prof.closePath();
+  const body = new THREE.ExtrudeGeometry(prof, { depth: P.W, bevelEnabled: true, bevelThickness: 0.07, bevelSize: 0.04, bevelSegments: 2, curveSegments: 6 });
+  body.translate(0, 0, -P.W / 2); body.rotateY(Math.PI / 2);
+  const cab = new THREE.Shape();
+  cab.moveTo(P.cabR, P.deck); cab.lineTo(P.roofR, P.roofY); cab.lineTo(P.roofF, P.roofY); cab.lineTo(P.cowl + 0.02, P.hoodR); cab.closePath();
+  const gd = P.W - 0.16;
+  const glass = new THREE.ExtrudeGeometry(cab, { depth: gd, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.015, bevelSegments: 1 });
+  glass.translate(0, 0, -gd / 2); glass.rotateY(Math.PI / 2);
+  return { P, body, glass, roof: box(P.W - 0.2, 0.05, P.roofF - P.roofR + 0.08), roofZ: -(P.roofF + P.roofR) / 2 };
+}
+BOXY.vaz2107 = boxyGeo({ L: 2.0, F: 2.07, deck: 0.9, cowl: 0.95, hoodR: 0.93, hoodF: 0.86, cabR: -1.1, roofR: -1.0, roofF: 0.28, roofY: 1.42, W: 1.46 });
+BOXY.m2105 = boxyGeo({ L: 2.1, F: 2.15, deck: 0.92, cowl: 1.0, hoodR: 0.95, hoodF: 0.88, cabR: -1.2, roofR: -1.1, roofF: 0.35, roofY: 1.44, W: 1.46 });
+
+function makeBoxyMesh(color, opts) {
+  const G = BOXY[opts.model], P = G.P, moz = opts.model === 'm2105';
+  const g = new THREE.Group();
+  g.rotation.order = 'YXZ';
+  const paint = paintFor(color), hw = P.W / 2 + 0.04, fz = -(P.F + 0.03), rz = P.L + 0.05;
+  g.add(new THREE.Mesh(G.body, paint));
+  g.add(new THREE.Mesh(G.glass, M.glass));
+  add(g, G.roof, paint, 0, P.roofY + 0.02, G.roofZ);
+  const tailMat = opts.player ? M.tailPlayer : M.tail;
+  if (!opts.lite) {
+    for (const sx of [-1, 1]) {
+      barIn(g, [sx * (hw - 0.05), P.hoodR, -P.cowl], [sx * (hw - 0.1), P.roofY, -P.roofF], 0.07, paint);   // А-стойка
+      barIn(g, [sx * (hw - 0.05), P.deck, -P.cabR], [sx * (hw - 0.1), P.roofY, -P.roofR], 0.08, paint);    // С-стойка
+      add(g, box(0.06, 0.5, 0.07), paint, sx * (hw - 0.02), P.deck + 0.27, 0.5);                              // В-стойка
+      add(g, CARG.mirror, paint, sx * (hw + 0.2), 1.0, -0.95);
+    }
+    if (moz) {
+      for (const sx of [-1, 1]) add(g, box(0.02, 0.03, 3.5), M.chrome, sx * (hw + 0.01), 0.62, 0.05);             // хромированная молдинг-полоса
+      add(g, box(1.55, 0.14, 0.1), M.dark, 0, 0.42, -(P.F + 0.1));                                               // чёрные пластиковые бамперы
+      add(g, box(1.55, 0.14, 0.1), M.dark, 0, 0.42, P.L + 0.1);
+      add(g, box(0.64, 0.22, 0.05), M.chrome, 0, 0.74, fz);
+      add(g, box(0.58, 0.16, 0.055), M.black, 0, 0.74, fz - 0.005);
+    } else {
+      add(g, box(P.W + 0.18, 0.08, 0.09), M.chrome, 0, 0.42, -(P.F + 0.1));                                       // хромированные бамперы
+      add(g, box(P.W + 0.18, 0.08, 0.09), M.chrome, 0, 0.42, P.L + 0.1);
+      add(g, box(0.7, 0.2, 0.05), M.chrome, 0, 0.72, fz);
+      add(g, box(0.64, 0.14, 0.055), M.black, 0, 0.72, fz - 0.005);
+      for (const sx of [-1, 1]) add(g, box(0.2, 0.07, 0.05), M.amber, sx * 0.6, 0.53, fz);                         // поворотники
+    }
+    add(g, box(0.4, 0.11, 0.03), M.plate, 0, 0.63, rz + 0.02);
+  }
+  const hl = moz ? [0.5, 0.26] : [0.42, 0.22];
+  for (const sx of [-1, 1]) {
+    add(g, box(hl[0], hl[1], 0.05), M.chrome, sx * (moz ? 0.54 : 0.56), 0.74, fz);
+    add(g, box(hl[0] - 0.07, hl[1] - 0.07, 0.06), M.head, sx * (moz ? 0.54 : 0.56), 0.74, fz - 0.01);
+    add(g, box(moz ? 0.5 : 0.34, moz ? 0.15 : 0.2, 0.05), tailMat, sx * 0.55, 0.78, rz);
+  }
+  const wheels = [], pivots = [];
+  for (const [sx, z, front] of [[-1, -1.28, 1], [1, -1.28, 1], [-1, 1.28, 0], [1, 1.28, 0]]) {
+    const w = makeWheel(CARG, opts.lite ? 0 : 3);
+    w.pivot.position.set(sx * (hw + 0.04), 0.33, z);
+    g.add(w.pivot); wheels.push(w);
+    if (front) pivots.push(w.pivot);
+    const arch = new THREE.Mesh(CARG.arch, M.black);
+    arch.position.set(sx * (hw + 0.006), 0.36, z); arch.rotation.y = sx * Math.PI / 2; g.add(arch);
+  }
+  const sh = new THREE.Mesh(CARG.shadow, M.shadow);
+  sh.rotation.x = -Math.PI / 2; sh.position.y = 0.04; g.add(sh);
+  for (const sx of [-1, 1]) {
+    const h = new THREE.Sprite(GLOW.head); h.position.set(sx * 0.55, 0.74, fz - 0.12); h.scale.set(2.2, 2.2, 1); g.add(h);
+    const t = new THREE.Sprite(GLOW.tail); t.position.set(sx * 0.55, 0.78, rz + 0.12); t.scale.set(1.9, 1.9, 1); g.add(t);
+  }
+  g.userData = { wheels, pivots, r: 0.33, rot: 0, tailMat: opts.player ? M.tailPlayer : null };
+  return g;
+}
+
+// ---------- мопед (скутер) с водителем ----------
+const MOP = {
+  tire: new THREE.CylinderGeometry(0.28, 0.28, 0.1, 16).rotateZ(Math.PI / 2),
+  rim: new THREE.CylinderGeometry(0.17, 0.17, 0.11, 12).rotateZ(Math.PI / 2),
+  spoke: box(0.115, 0.3, 0.02), shadow: new THREE.PlaneGeometry(1.4, 2.8),
+};
+function makeMopedMesh(color, opts) {
+  opts = opts || {};
+  const g = new THREE.Group();
+  g.rotation.order = 'YXZ';
+  const paint = paintFor(color), jacket = matFor(0x2d4a7a), jeans = matFor(0x2a3140), helmet = matFor(0xf2f2f2), glove = matFor(0x151515), seatM = matFor(0x16171a);
+  const mirGlass = new THREE.MeshBasicMaterial({ color: 0x59657a });
+  const wf = makeWheel(MOP, 3), wr = makeWheel(MOP, 3);
+  wr.pivot.position.set(0, 0.28, 0.62); g.add(wr.pivot);
+  const fork = new THREE.Group(); fork.position.set(0, 0, -0.62); g.add(fork);
+  wf.pivot.position.set(0, 0.28, 0); fork.add(wf.pivot);
+  add(fork, box(0.12, 0.03, 0.42), paint, 0, 0.58, 0);                       // переднее крыло
+  barIn(fork, [0, 0.28, 0], [0, 1.02, 0.14], 0.04, M.chrome);                // вилка и рулевая колонка
+  add(fork, box(0.62, 0.03, 0.03), M.black, 0, 1.03, 0.14);                  // руль
+  for (const sx of [-1, 1]) {
+    add(fork, box(0.1, 0.045, 0.045), glove, sx * 0.3, 1.03, 0.14);          // перчатки / ручки
+    barIn(fork, [sx * 0.26, 1.04, 0.14], [sx * 0.3, 1.28, 0.12], 0.015, M.black);
+    add(fork, box(0.12, 0.08, 0.015), mirGlass, sx * 0.3, 1.3, 0.12);        // зеркала
+  }
+  add(fork, box(0.2, 0.2, 0.16), M.chrome, 0, 1.0, -0.04);                   // фара
+  add(fork, box(0.15, 0.15, 0.02), M.head, 0, 1.0, -0.13);
+  add(fork, box(0.14, 0.08, 0.1), M.black, 0, 1.07, 0.12);                   // приборка
+  const hs = new THREE.Sprite(GLOW.head); hs.position.set(0, 1.0, -0.24); hs.scale.set(1.6, 1.6, 1); fork.add(hs);
+  add(g, box(0.42, 0.55, 0.05), paint, 0, 0.62, -0.42).rotation.x = 0.2;     // щиток для ног
+  add(g, box(0.4, 0.04, 0.55), M.dark, 0, 0.27, -0.05);                      // подножка
+  add(g, box(0.34, 0.34, 0.72), paint, 0, 0.5, 0.42);                        // кожух
+  add(g, box(0.16, 0.03, 0.5), paint, 0, 0.6, 0.64);                         // заднее крыло
+  add(g, box(0.28, 0.09, 0.52), seatM, 0, 0.79, 0.28);                       // сиденье
+  add(g, box(0.07, 0.07, 0.5), M.chrome, 0.19, 0.28, 0.5);                   // глушитель
+  add(g, box(0.14, 0.06, 0.04), opts.player ? M.tailPlayer : M.tail, 0, 0.64, 1.0);
+  add(g, box(0.2, 0.12, 0.02), M.plate, 0, 0.5, 1.02);
+  const ts = new THREE.Sprite(GLOW.tail); ts.position.set(0, 0.64, 1.1); ts.scale.set(1.4, 1.4, 1); g.add(ts);
+  const rider = new THREE.Group(); g.add(rider);
+  add(rider, box(0.38, 0.5, 0.22), jacket, 0, 1.12, 0.28).rotation.x = -0.2;
+  add(rider, new THREE.SphereGeometry(0.14, 12, 10), helmet, 0, 1.5, 0.16);
+  add(rider, box(0.2, 0.07, 0.12), M.black, 0, 1.48, 0.05);
+  for (const sx of [-1, 1]) {
+    add(rider, box(0.14, 0.14, 0.45), jeans, sx * 0.14, 0.86, 0.02);
+    add(rider, box(0.12, 0.4, 0.12), jeans, sx * 0.16, 0.56, -0.24);
+    barIn(rider, [sx * 0.2, 1.3, 0.22], [sx * 0.29, 1.06, -0.4], 0.08, jacket);
+  }
+  const wheels = [wf, wr];
+  const sh = new THREE.Mesh(MOP.shadow, M.shadow);
+  sh.rotation.x = -Math.PI / 2; sh.position.y = 0.04; g.add(sh);
+  g.userData = { wheels, pivots: [fork], r: 0.28, rot: 0, tailMat: opts.player ? M.tailPlayer : null, rider };
   return g;
 }
 
@@ -1087,11 +1254,17 @@ let PLAYER_COLOR = 0xd23a2e;
 let playerMesh = makeCarMesh(PLAYER_COLOR, { player: true });
 scene.add(playerMesh);
 
-const cockpit = new THREE.Group();
-cockpit.visible = false;
-camera.add(cockpit);
-const dashMat = matFor(0x1b1d24);
-const trimMat = matFor(0x2b2e38), roofMat = matFor(0x9a9a98), pillarMat = matFor(0x16171c);
+// ---------- кабины (в системе координат машины: перёд = −z, водитель слева) ----------
+const cabin = new THREE.Group();
+cabin.rotation.order = 'YXZ';
+cabin.visible = false;
+scene.add(cabin);
+let cabBody = new THREE.Group();
+cabin.add(cabBody);
+const cab = { steer: null };
+camera.rotation.order = 'YXZ';
+const look = { yaw: 0, pitch: 0, drag: false, back: false };
+
 function dashTex() {
   const c = document.createElement('canvas'); c.width = c.height = 128;
   const g = c.getContext('2d');
@@ -1100,67 +1273,143 @@ function dashTex() {
   const tx = new THREE.CanvasTexture(c); tx.wrapS = tx.wrapT = THREE.RepeatWrapping; tx.repeat.set(4, 1);
   return tx;
 }
-const dashM = new THREE.MeshPhongMaterial({ map: dashTex(), color: 0xffffff, shininess: 12 });
-// стойка/балка между двумя точками
-function bar(a, b, th, mat) {
-  const va = new THREE.Vector3(...a), vb = new THREE.Vector3(...b), d = vb.clone().sub(va), len = d.length();
-  const m = new THREE.Mesh(new THREE.BoxGeometry(th, th, len), mat);
-  m.position.copy(va.clone().add(vb).multiplyScalar(0.5));
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), d.normalize());
-  cockpit.add(m);
-  return m;
-}
-// торпедо: основная плита, козырёк над приборами, центральная консоль
-add(cockpit, new THREE.BoxGeometry(2.0, 0.26, 0.7), dashM, 0.38, -0.62, -0.95);
-add(cockpit, new THREE.BoxGeometry(2.0, 0.05, 0.12), trimMat, 0.38, -0.47, -0.62);
-add(cockpit, new THREE.BoxGeometry(0.34, 0.5, 0.5), trimMat, 0.62, -0.72, -0.6);          // центральная консоль
-add(cockpit, new THREE.BoxGeometry(0.3, 0.1, 0.03), matFor(0x0b0c10), 0.62, -0.5, -0.77);  // магнитола
-for (const vx of [0.3, 0.95]) {                                                          // дефлекторы
-  add(cockpit, new THREE.BoxGeometry(0.2, 0.07, 0.02), matFor(0x0b0c10), vx, -0.5, -0.68);
-  for (let s = 0; s < 3; s++) add(cockpit, new THREE.BoxGeometry(0.19, 0.006, 0.025), matFor(0x555a66), vx, -0.525 + s * 0.025, -0.675);
-}
-const hoodMesh = add(cockpit, new THREE.BoxGeometry(1.6, 0.08, 1.7), matFor(PLAYER_COLOR), 0.38, -0.58, -2.3); // капот
-// крыша, стойки, рамки стёкол
-add(cockpit, new THREE.BoxGeometry(1.9, 0.05, 0.9), roofMat, 0.38, 0.62, -0.1);
-add(cockpit, new THREE.BoxGeometry(1.9, 0.09, 0.1), pillarMat, 0.38, 0.6, -0.56);
-bar([-0.78, -0.5, -0.95], [-0.5, 0.6, -0.5], 0.045, pillarMat);       // левая А-стойка
-bar([1.54, -0.5, -0.95], [1.26, 0.6, -0.5], 0.045, pillarMat);        // правая
-bar([-0.8, -0.46, -0.9], [-0.84, -0.46, 0.3], 0.05, trimMat);       // порог левого окна
-bar([1.56, -0.46, -0.9], [1.6, -0.46, 0.3], 0.05, trimMat);
-// зеркало заднего вида (стекло показывает тусклое небо) и боковые
-add(cockpit, new THREE.BoxGeometry(0.03, 0.1, 0.03), pillarMat, 0.42, 0.52, -0.52);
-add(cockpit, new THREE.BoxGeometry(0.3, 0.085, 0.04), pillarMat, 0.42, 0.46, -0.5);
-add(cockpit, new THREE.BoxGeometry(0.27, 0.06, 0.01), new THREE.MeshBasicMaterial({ color: 0x59657a }), 0.42, 0.46, -0.478);
-for (const mx of [-0.9, 1.66]) {
-  add(cockpit, new THREE.BoxGeometry(0.06, 0.1, 0.16), pillarMat, mx, -0.3, -0.9);
-  add(cockpit, new THREE.BoxGeometry(0.01, 0.08, 0.13), new THREE.MeshBasicMaterial({ color: 0x4a566c }), mx + (mx < 0 ? 0.035 : -0.035), -0.3, -0.9);
-}
-// приборная панель — живой спидометр из канвы #gauge
 const gaugeEl = document.getElementById('gauge');
 const gaugeTex = new THREE.CanvasTexture(gaugeEl);
-const gaugeMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.26), new THREE.MeshBasicMaterial({ map: gaugeTex, transparent: true, depthWrite: false }));
-gaugeMesh.position.set(0, -0.385, -0.84);
-gaugeMesh.rotation.x = -0.95;
-cockpit.add(gaugeMesh);
-const cabinLight = new THREE.PointLight(0xffd9a0, 0, 3);
-cabinLight.position.set(0.38, 0.4, -0.2);
-cockpit.add(cabinLight);
-// VR: камера и салон переезжают в «рамку», которую двигаем вместе с машиной
+const gaugePlane = w => new THREE.Mesh(new THREE.PlaneGeometry(w, w), new THREE.MeshBasicMaterial({ map: gaugeTex, transparent: true, depthWrite: false }));
+const cabinLight = new THREE.PointLight(0xffd9a0, 0, 3.5);
+cabinLight.position.set(-0.1, 1.3, 0.3);
+cabin.add(cabinLight);
+
+// зеркало заднего вида: настоящий вид назад, рисуется в маленькую текстуру
+const mirrorRT = new THREE.WebGLRenderTarget(512, 128, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
+mirrorRT.texture.wrapS = THREE.RepeatWrapping; mirrorRT.texture.repeat.set(-1, 1); mirrorRT.texture.offset.set(1, 0);
+const mirrorMat = new THREE.MeshBasicMaterial({ map: mirrorRT.texture, fog: false });
+const mirrorCam = new THREE.PerspectiveCamera(40, 4, 0.2, 900);
+const mirrorEye = new THREE.Vector3();
+let mirrorOn = false, mirrorYaw = 0, mirrorTick = 0;
+function renderMirror() {
+  if (!mirrorOn || !renderer.setRenderTarget) return;
+  mirrorTick++;
+  if (mirrorTick % 2) return;
+  mirrorCam.position.copy(mirrorEye);
+  mirrorCam.rotation.set(0, mirrorYaw, 0);
+  const vis = cabin.visible;
+  cabin.visible = false;
+  renderer.setRenderTarget(mirrorRT);
+  renderer.render(scene, mirrorCam);
+  renderer.setRenderTarget(null);
+  cabin.visible = vis;
+}
+
+const CAB_STYLE = {
+  lanos:   { tint: 0xffffff, trim: 0x2b2e38, seat: 0x3d424f, liner: 0x9d9d9a, door: 0x303341, pillar: 0x2a2c33, wheel: 'lanos', ws: [-1.0, -0.7], rr: [1.16, 0.55], roofY: 1.45, high: false },
+  vaz2107: { tint: 0xd6b08e, trim: 0x3a342f, seat: 0x7a6544, liner: 0xcfc8b4, door: 0x54463a, pillar: 0x8a8472, wheel: 'vaz', ws: [-0.97, -0.66], rr: [1.1, 1.0], roofY: 1.45, high: true, wood: 0x7a4a24 },
+  m2105:   { tint: 0xb4b4b4, trim: 0x2b2a2e, seat: 0x6e2430, liner: 0xbdb5a5, door: 0x3b2b2e, pillar: 0x4a4640, wheel: 'mosk', ws: [-1.0, -0.7], rr: [1.2, 1.1], roofY: 1.47, high: false, wood: 0x35312c },
+};
+
+function buildSedanCabin(V, color) {
+  const S = CAB_STYLE[V.id], g = cabBody, A = (geo, mat, x, y, z) => add(g, geo, mat, x, y, z);
+  const paint = paintFor(color);
+  const trim = matFor(S.trim), seatM = matFor(S.seat), liner = new THREE.MeshPhongMaterial({ color: S.liner, emissive: 0x333330 }), door = matFor(S.door), pillarM = matFor(S.pillar);
+  const dark = matFor(0x101114), carpet = matFor(0x22252b), leather = matFor(0x0e0f12);
+  const dashM = new THREE.MeshPhongMaterial({ map: dashTex(), color: S.tint, shininess: 12 });
+  const roofY = S.roofY, wsB = S.ws[0], wsT = S.ws[1], rrB = S.rr[0], rrT = S.rr[1], sill = 0.92;
+  const mirGlass = new THREE.MeshBasicMaterial({ color: 0x4a566c });
+
+  A(box(1.5, 0.04, 2.5), carpet, 0, 0.3, 0.2);                                  // пол
+  A(box(0.26, 0.14, 1.3), trim, 0, 0.36, 0.2);                                  // тоннель
+  A(box(1.66, 0.26, 0.7), dashM, 0, 0.56, -0.8);                                // торпедо
+  A(box(1.66, 0.04, 0.1), trim, 0, 0.705, -0.5);
+  A(box(0.32, 0.4, 0.55), trim, 0, 0.48, -0.17);                                // центральная консоль
+  A(box(0.3, 0.1, 0.03), dark, 0, 0.6, -0.435);                                 // магнитола
+  for (const vx of [-0.68, -0.2, 0.2, 0.68]) {                                  // дефлекторы
+    A(box(0.16, 0.06, 0.02), dark, vx, 0.64, -0.445);
+    for (let s = 0; s < 3; s++) A(box(0.15, 0.006, 0.025), matFor(0x555a66), vx, 0.625 + s * 0.02, -0.44);
+  }
+  if (S.wood) A(box(1.5, 0.035, 0.012), matFor(S.wood), 0, 0.665, -0.447);       // декоративная вставка
+  if (V.id === 'm2105') A(box(1.6, 0.02, 0.01), M.chrome, 0, 0.7, -0.448);
+  const gm = gaugePlane(0.26); gm.position.set(-0.38, 0.795, -0.69); gm.rotation.x = -0.95; g.add(gm);   // приборка
+
+  // руль
+  const wp = new THREE.Group(); wp.position.set(-0.38, 0.78, -0.47); wp.rotation.x = -1.1; g.add(wp);
+  const sw = new THREE.Group(); wp.add(sw); cab.steer = sw;
+  if (S.wheel === 'lanos') {
+    sw.add(new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.022, 10, 32), leather));
+    add(sw, box(0.28, 0.025, 0.02), leather, 0, 0, 0); add(sw, box(0.025, 0.13, 0.02), leather, 0, -0.065, 0);
+  } else {
+    const r = S.wheel === 'vaz' ? 0.17 : 0.18;
+    sw.add(new THREE.Mesh(new THREE.TorusGeometry(r, 0.015, 8, 36), leather));
+    if (S.wheel === 'vaz') sw.add(new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.006, 6, 20), M.chrome));
+    add(sw, box(r * 2 - 0.02, 0.018, 0.016), leather, 0, 0, 0); add(sw, box(0.018, r - 0.02, 0.016), leather, 0, -r / 2, 0);
+  }
+  add(sw, new THREE.CylinderGeometry(0.04, 0.045, 0.035, 16), matFor(0x2a2c33), 0, 0, 0.01).rotation.x = Math.PI / 2;
+  barIn(g, [-0.38, 0.76, -0.49], [-0.38, 0.56, -0.7], 0.06, dark);                // колонка
+
+  // сиденья
+  const seat = (x, z) => {
+    A(box(0.46, 0.12, 0.5), seatM, x, 0.5, z);
+    A(box(0.46, S.high ? 0.74 : 0.6, 0.12), seatM, x, S.high ? 0.95 : 0.88, z + 0.28).rotation.x = 0.12;
+    if (!S.high) A(box(0.24, 0.17, 0.1), seatM, x, 1.27, z + 0.34);
+  };
+  seat(-0.38, 0.22); seat(0.38, 0.22);
+  const seatHi = new THREE.MeshPhongMaterial({ color: S.seat, emissive: 0x1c1c1c });
+  for (const hx of [-0.38, 0.38]) A(box(0.3, S.high ? 0.5 : 0.38, 0.01), seatHi, hx, 0.88, 0.5);             // накладка на спинке
+  A(box(0.92, 0.3, 0.01), seatHi, 0, 0.78, rrB - 0.07);
+  A(box(1.38, 0.12, 0.46), seatM, 0, 0.5, rrB - 0.4);                           // задний диван
+  A(box(1.38, 0.55, 0.12), seatM, 0, 0.82, rrB).rotation.x = 0.12;
+  for (const hx of [-0.34, 0.34]) A(box(0.22, 0.15, 0.08), seatM, hx, 1.14, rrB + 0.04);
+
+  // двери, стойки, крыша
+  for (const sx of [-1, 1]) {
+    A(box(0.06, 0.5, 1.95), door, sx * 0.82, 0.66, 0.22);
+    A(box(0.07, 0.035, 1.95), trim, sx * 0.83, 0.925, 0.22);
+    A(box(0.1, 0.07, 0.32), trim, sx * 0.77, 0.82, 0.05);
+    A(box(0.02, 0.035, 0.15), M.chrome, sx * 0.78, 0.87, -0.12);
+    barIn(g, [sx * 0.78, sill, wsB + 0.02], [sx * 0.7, roofY, wsT], 0.05, pillarM);
+    barIn(g, [sx * 0.78, sill, rrB], [sx * 0.68, roofY, rrT], 0.08, pillarM);
+    A(box(0.06, 0.5, 0.08), pillarM, sx * 0.8, sill + 0.25, 0.6);
+    barIn(g, [sx * 0.72, roofY, wsT], [sx * 0.72, roofY, rrT], 0.05, liner);
+    A(box(0.07, 0.1, 0.17), paint, sx * 0.95, 1.0, -0.88);                       // боковые зеркала
+    A(box(0.01, 0.08, 0.14), mirGlass, sx * 0.95 - sx * 0.04, 1.0, -0.88);
+  }
+  A(box(1.42, 0.04, rrT - wsT + 0.12), liner, 0, roofY + 0.01, (wsT + rrT) / 2);  // потолок
+  A(box(1.36, 0.05, 0.06), pillarM, 0, roofY - 0.02, wsT - 0.01);
+  A(box(1.3, 0.08, 0.09), pillarM, 0, roofY - 0.03, rrT + 0.03);
+  A(box(0.34, 0.02, 0.2), liner, -0.38, roofY - 0.06, wsT + 0.14);              // козырьки
+  A(box(0.34, 0.02, 0.2), liner, 0.38, roofY - 0.06, wsT + 0.14);
+  A(box(1.36, 0.04, 0.55), carpet, 0, 0.97, rrB + 0.3);                          // полка под задним стеклом
+  A(box(1.4, 0.04, 0.85), paint, 0, 0.93, rrB + 0.97);                           // крышка багажника — видна через заднее стекло
+  A(box(1.4, 0.04, 1.1), paint, 0, 0.91, -1.6).rotation.x = -0.05;               // капот
+
+  // зеркало заднего вида
+  const mg = new THREE.Group(); mg.position.set(0, 1.34, -0.75); mg.rotation.y = -0.5; g.add(mg);
+  add(mg, box(0.3, 0.085, 0.04), dark, 0, 0, 0);
+  add(mg, new THREE.PlaneGeometry(0.27, 0.0675), mirrorMat, 0, 0, 0.022);
+  barIn(g, [0, 1.38, -0.75], [0, roofY - 0.02, -0.7], 0.02, dark);
+
+  barIn(g, [0, 0.34, -0.1], [0.02, 0.58, -0.14], 0.02, dark);                    // рычаг КПП
+  add(g, new THREE.SphereGeometry(0.03, 8, 6), dark, 0.02, 0.6, -0.14);
+}
+
+function buildMopedCabin() {
+  const gm = gaugePlane(0.15);
+  gm.position.set(0, 1.115, -0.49); gm.rotation.x = -0.95;
+  cabBody.add(gm);
+  cab.steer = null;
+}
+
+function buildCabin(i, color) {
+  cabin.remove(cabBody);
+  cabBody = new THREE.Group();
+  cabin.add(cabBody);
+  cab.steer = null;
+  if (VEH[i].id === 'moped') buildMopedCabin();
+  else buildSedanCabin(VEH[i], color);
+}
+buildCabin(0, PLAYER_COLOR);
+
 if (renderer.xr) renderer.xr.enabled = true;
 const vr = { on: false, session: null, rig: new THREE.Group(), stickPrev: 0 };
-// руль
-const wheelPivot = new THREE.Group();
-wheelPivot.position.set(0, -0.4, -0.62);
-wheelPivot.rotation.x = -1.1;
-cockpit.add(wheelPivot);
-const steerWheel = new THREE.Group();
-wheelPivot.add(steerWheel);
-const leather = matFor(0x0e0f12);
-steerWheel.add(new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.02, 10, 32), leather));
-add(steerWheel, new THREE.BoxGeometry(0.27, 0.025, 0.02), leather, 0, 0.0, 0);
-add(steerWheel, new THREE.BoxGeometry(0.025, 0.13, 0.02), leather, 0, -0.065, 0);
-add(steerWheel, new THREE.CylinderGeometry(0.04, 0.045, 0.035, 16), matFor(0x2a2c33), 0, 0, 0.01).rotation.x = Math.PI / 2;
-add(cockpit, new THREE.CylinderGeometry(0.035, 0.04, 0.3, 10), pillarMat, 0, -0.55, -0.78).rotation.x = 1.1;  // колонка
 
 // ---------- шоссе ----------
 const ROAD_L = 720, TILE = 12;
@@ -1284,7 +1533,7 @@ function buildRoad(lanes) {
   // встречный поток (только декорация)
   world.oncoming = Array.from({ length: 12 }, (_, i) => {
     const truck = Math.random() < 0.22;
-    const m = truck ? makeTruckMesh(pick(TRUCK_COLORS)) : makeCarMesh(pick(CAR_COLORS), { lite: true });
+    const m = truck ? makeTruckMesh(pick(TRUCK_COLORS)) : makeCarMesh(pick(CAR_COLORS), { lite: true, model: pick(CAR_MODELS) });
     m.rotation.y = Math.PI;
     grp.add(m);
     return { mesh: m, lane: i % lanes, v: truck ? rnd(21, 25) : rnd(26, 36), z: 0, x: world.oncX + laneX(i % lanes, lanes), init: false };
@@ -1349,7 +1598,7 @@ function syncTraffic(list, dt) {
     seen.add(o.id);
     let m = vMeshes.get(o.id);
     if (!m) {
-      m = o.kind === 'truck' ? makeTruckMesh(o.color) : makeCarMesh(o.color, { lite: true });
+      m = o.kind === 'truck' ? makeTruckMesh(o.color) : makeCarMesh(o.color, { lite: true, model: CAR_MODELS[o.id % 3] });
       scene.add(m);
       vMeshes.set(o.id, m);
     }
@@ -1367,13 +1616,13 @@ function syncRemotes(list, dt) {
   for (const r of list) {
     seen.add(r.id);
     let e = rMeshes.get(r.id);
-    if (!e || e.name !== r.name) {
+    if (!e || e.name !== r.name || e.veh !== r.veh) {
       if (e) { scene.remove(e.mesh); e.tag.material.map.dispose(); e.tag.material.dispose(); }
-      const mesh = makeCarMesh(r.color);
+      const mesh = makeCarMesh(r.color, { model: VEH[r.veh | 0].id });
       const tag = makeNameTag(r.name);
       mesh.add(tag);
       scene.add(mesh);
-      e = { mesh, tag, name: r.name };
+      e = { mesh, tag, name: r.name, veh: r.veh };
       rMeshes.set(r.id, e);
     }
     e.mesh.position.set(r.x, 0, r.z);
@@ -1388,44 +1637,58 @@ function syncRemotes(list, dt) {
 // ---------- камера и меш игрока ----------
 const camState = { x: 0, z: 0 };
 function updateView(P, dt, view, t) {
+  const V = VEH[VEH_I], moped = V.id === 'moped';
   if (vr.on) view = 'first';
   else if (!P.alive) view = 'third';
   const rollV = clamp(0.012 * P.aLat, -0.07, 0.07);
   const pitchV = clamp(0.006 * P.aLong, -0.06, 0.06);
+  const lean = moped ? clamp(0.03 * P.aLat, -0.3, 0.3) : rollV;
   const k = clamp(P.v / 50, 0, 1);
-  const fov = (view === 'first' ? 74 : 62) + k * 14;
+  const fov = (view === 'first' ? 80 : 62) + k * 12;
   if (!vr.on && Math.abs(camera.fov - fov) > 0.05) { camera.fov = fov; camera.updateProjectionMatrix(); }
 
   playerMesh.position.set(P.x, 0, P.z);
-  playerMesh.rotation.set(pitchV, -P.yaw, rollV);
+  playerMesh.rotation.set(pitchV, -P.yaw, lean);
+  cabin.position.set(P.x, 0, P.z);
+  cabin.rotation.set(pitchV, -P.yaw, lean);
   headlights.position.set(P.x, 0, P.z); headlights.rotation.y = -P.yaw;
-  animateCar(playerMesh, P.v, dt, P.steer * 0.5 * (1 - Math.min(P.v / 40, 0.75)));
+  animateCar(playerMesh, P.v, dt, P.steer * (moped ? 0.7 : 0.5) * (1 - Math.min(P.v / 40, 0.75)));
   setBrakeLights(playerMesh, P.aLong < -2.5);
+  const rider = playerMesh.userData && playerMesh.userData.rider;
+  mirrorOn = false;
 
   if (view === 'first') {
-    cockpit.visible = true;
-    playerMesh.visible = false;
+    cabin.visible = true;
+    playerMesh.visible = moped;
+    if (rider) rider.visible = false;
     gaugeTex.needsUpdate = true;
     cabinLight.intensity = hemi.intensity < 0.5 ? 0.9 : 0;
     if (gaugeEl.style.visibility !== 'hidden') gaugeEl.style.visibility = 'hidden';
-    const c = Math.cos(P.yaw), s = Math.sin(P.yaw);
-    const bump = Math.sin(t * 38) * 0.004 * k + (P.scrape ? Math.sin(t * 90) * 0.02 : 0);
-    if (vr.on) { vr.rig.position.set(P.x - 0.38 * c - 0.15 * s, 1.18, P.z - 0.38 * s + 0.15 * c); vr.rig.rotation.set(0, -P.yaw, 0); }
-    else {
-      camera.position.set(P.x - 0.38 * c - 0.15 * s, 1.18 + bump, P.z - 0.38 * s + 0.15 * c);
-      camera.rotation.set(pitchV, -P.yaw, rollV);
+    if (!look.drag) {
+      look.yaw += ((look.back ? Math.PI : 0) - look.yaw) * Math.min(1, dt * 8);
+      look.pitch += (0 - look.pitch) * Math.min(1, dt * 6);
     }
-    steerWheel.rotation.z = -P.steer * 2.2;
+    const c = Math.cos(P.yaw), s = Math.sin(P.yaw), E = V.eye;
+    const bump = Math.sin(t * 38) * 0.004 * k + (P.scrape ? Math.sin(t * 90) * 0.02 : 0);
+    const ex = P.x + E[0] * c - E[2] * s, ey = E[1] + bump, ez = P.z + E[0] * s + E[2] * c;
+    if (vr.on) { vr.rig.position.set(ex, ey, ez); vr.rig.rotation.set(0, -P.yaw, 0); }
+    else {
+      camera.position.set(ex, ey, ez);
+      camera.rotation.set(pitchV + look.pitch, -P.yaw + look.yaw, lean * 0.6);
+      if (!moped) { mirrorOn = true; mirrorEye.set(ex, ey, ez); mirrorYaw = -P.yaw + Math.PI; }
+    }
+    if (cab.steer) cab.steer.rotation.z = -P.steer * 2.2;
   } else {
-    cockpit.visible = false;
+    cabin.visible = false;
+    if (rider) rider.visible = true;
     if (gaugeEl.style.visibility === 'hidden') gaugeEl.style.visibility = '';
     playerMesh.visible = !(P.immune > 0 && Math.floor(t * 10) % 2 === 0);
     camState.x += (P.x * 0.8 - camState.x) * Math.min(1, dt * 5);
     camState.z += (clamp(P.aLong, -7, 5) * 0.2 - camState.z) * Math.min(1, dt * 3);
     const sh = k * k * 0.014;
-    camera.position.set(camState.x + Math.sin(t * 27) * sh, 3.7 + k * 0.5 + Math.sin(t * 33) * sh + (P.scrape ? Math.sin(t * 80) * 0.04 : 0), P.z + 9.5 + k * 2 + camState.z);
+    camera.position.set(camState.x + Math.sin(t * 27) * sh, V.cam[0] + k * 0.5 + Math.sin(t * 33) * sh + (P.scrape ? Math.sin(t * 80) * 0.04 : 0), P.z + V.cam[1] + k * 2 + camState.z);
     camera.lookAt(P.x * 0.55 - P.yaw * 6, -0.6, P.z - 16);
-    camera.rotation.z += rollV * 0.35;
+    camera.rotation.z += lean * 0.35;
   }
   const eye = vr.on ? vr.rig.position : camera.position;
   skyDome.position.copy(eye); stars.position.copy(eye);
@@ -1539,13 +1802,13 @@ function setTimeOfDay(k) {
   return t.lights;      // нужны ли фары по умолчанию
 }
 
-function setPlayerColor(c) {
-  PLAYER_COLOR = c;
+function rebuildPlayer() {
   scene.remove(playerMesh);
-  playerMesh = makeCarMesh(c, { player: true });
+  playerMesh = makeCarMesh(PLAYER_COLOR, { player: true, model: VEH[VEH_I].id });
   scene.add(playerMesh);
-  hoodMesh.material = matFor(c);
+  buildCabin(VEH_I, PLAYER_COLOR);
 }
+function setPlayerColor(c) { PLAYER_COLOR = c; rebuildPlayer(); }
 
 // фары: прожектор + мягкий конус света; стоят в сцене и едут за машиной (работают и из кабины)
 const headlights = new THREE.Group();
@@ -1579,7 +1842,7 @@ function takePhoto() {
   } catch (e) { return false; }
 }
 
-function render() { renderer.render(scene, camera); }
+function render() { renderMirror(); renderer.render(scene, camera); }
 buildRoad(game.lanes);
 // ======================= ПРИЛОЖЕНИЕ: ввод, меню, спидометр, цикл =======================
 const $ = id => document.getElementById(id);
@@ -1645,7 +1908,7 @@ const admin = { on: false, god: false, big: false };
 // exact=true — любое целое (админ), иначе шаг 5
 function setTarget(kmh, exact) {
   const q = exact && admin.on ? Math.round(kmh) : Math.round(kmh / 5) * 5;
-  cfg.targetKmh = admin.on ? clamp(q, 0, 400) : clamp(q, 20, 180);
+  cfg.targetKmh = admin.on ? clamp(q, 0, 400) : clamp(q, 20, VEH[VEH_I].vmax);
   setSpeedScale(admin.on ? cfg.targetKmh : 0);     // мощность двигателя подгоняется под выбранную скорость
   el.speedRange.value = cfg.targetKmh;
   el.speedLabel.textContent = cfg.targetKmh + ' км/ч';
@@ -1951,6 +2214,7 @@ function todIcon(k) {
   return '<svg viewBox="0 0 64 64"><rect width="64" height="64" fill="' + sky + '"/>' + g + '<path d="M0 46h64v18H0z" fill="' + ground + '"/><path d="M26 46h12l12 18H14z" fill="#2b2c34"/></svg>';
 }
 cfg.tod = TOD_KEYS.includes(cfg.tod) ? cfg.tod : 'day';
+cfg.veh = clamp(Math.round(num(cfg.veh, 0)), 0, VEH.length - 1);
 cfg.color = clamp(Math.round(num(cfg.color, 0)), 0, CAR_COLORS.length - 1);
 cfg.diff = clamp(Math.round(num(cfg.diff, 1)), 0, DIFFICULTY.length - 1);
 cfg.sound = cfg.sound !== false;
@@ -1975,9 +2239,11 @@ function initEnv() {
   el.todSeg.innerHTML = TOD_KEYS.map(k => '<button data-v="' + k + '">' + todIcon(k) + '<span>' + TOD[k].name + '</span></button>').join('');
   el.colorRow.innerHTML = CAR_COLORS.map((c, i) => '<button class="sw" data-i="' + i + '" style="background:#' + c.toString(16).padStart(6, '0') + '" aria-label="Цвет ' + (i + 1) + '"></button>').join('');
   el.diffSeg.innerHTML = DIFFICULTY.map((d, i) => '<button data-i="' + i + '">' + d.name + '</button>').join('');
+  el.vehSeg.innerHTML = VEH.map((v, i) => '<button data-i="' + i + '">' + vehIcon(v.id) + '<span>' + v.short + '</span></button>').join('');
   applyTod(cfg.tod);
   showColor(); showDiff(); showSound();
-  setPlayerColor(CAR_COLORS[cfg.color]);
+  PLAYER_COLOR = CAR_COLORS[cfg.color];
+  setVehicle(cfg.veh);
   setDifficulty(cfg.diff);
 }
 function showColor() { [...el.colorRow.children].forEach(b => b.classList.toggle('on', +b.dataset.i === cfg.color)); }
@@ -2061,6 +2327,57 @@ addEventListener('keydown', e => {
 });
 
 
+
+// ---------- выбор транспорта ----------
+['vehSeg', 'vehHint', 'btnBack'].forEach(id => { el[id] = $(id); });
+function vehIcon(id) {
+  const bg = '<rect width="64" height="64" rx="8" fill="#2b2f4a"/>';
+  const wh = (x, r) => '<circle cx="' + x + '" cy="44" r="' + r + '" fill="#15161a" stroke="#dfe5ff" stroke-width="2"/>';
+  if (id === 'moped') return '<svg viewBox="0 0 64 64">' + bg + wh(17, 8) + wh(47, 8) + '<path d="M17 44l8-15h9l3 8h8l2 7" stroke="#ffb02e" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="25" y="26" width="13" height="5" rx="2" fill="#2a2f44"/><path d="M41 24l-3 5M36 24h8" stroke="#dfe5ff" stroke-width="3" stroke-linecap="round"/><circle cx="31" cy="15" r="5" fill="#f2f2f2"/></svg>';
+  const body = { lanos: ['#d23a2e', 'M8 42q0-8 8-9l8-9h18l8 9q8 1 8 9z'], vaz2107: ['#d8c58a', 'M8 42v-9l6-2 6-9h22l6 9 8 2v9z'], m2105: ['#7aa36b', 'M7 42v-9l8-2 5-9h24l5 9 8 2v9z'] }[id];
+  const win = id === 'lanos' ? '<path d="M25 26h14l5 6H20z" fill="#bfe0ff"/>' : '<path d="M24 25h16l4 7H20z" fill="#bfe0ff"/>';
+  return '<svg viewBox="0 0 64 64">' + bg + '<path d="' + body[1] + '" fill="' + body[0] + '"/>' + win + wh(19, 6) + wh(45, 6) + '</svg>';
+}
+function showVehicle() {
+  [...el.vehSeg.children].forEach(b => b.classList.toggle('on', +b.dataset.i === cfg.veh));
+  el.vehHint.textContent = VEH[cfg.veh].name + ' · до ' + VEH[cfg.veh].vmax + ' км/ч' + (cfg.veh === 3 ? ' · руль наклоняет мопед' : '');
+}
+function setVehicle(i) {
+  cfg.veh = clamp(i | 0, 0, VEH.length - 1);
+  setVehicleSim(cfg.veh);
+  rebuildPlayer();
+  if (app.P) { app.P.len = PLAYER_DIM.len; app.P.wid = PLAYER_DIM.wid; app.P.mass = PLAYER_DIM.mass; }
+  el.speedRange.max = VEH[cfg.veh].vmax;
+  if (!admin.on && cfg.targetKmh > VEH[cfg.veh].vmax) setTarget(VEH[cfg.veh].vmax);
+  showVehicle();
+  saveCfg();
+}
+el.vehSeg.addEventListener('click', e => { const b = e.target.closest('button'); if (b) setVehicle(+b.dataset.i); });
+
+// осмотреться: мышь / палец по сцене, клавиша C и кнопка «Назад» — смотреть назад
+(function () {
+  const dom = renderer.domElement;
+  let last = null;
+  dom.addEventListener('pointerdown', e => {
+    if (cfg.view !== 'first' || app.menuOpen || vr.on) return;
+    look.drag = true; last = { x: e.clientX, y: e.clientY };
+    try { dom.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  dom.addEventListener('pointermove', e => {
+    if (!look.drag || !last) return;
+    look.yaw = clamp(look.yaw + (e.clientX - last.x) * 0.006, -3.3, 3.3);
+    look.pitch = clamp(look.pitch + (e.clientY - last.y) * 0.004, -0.9, 0.9);
+    last = { x: e.clientX, y: e.clientY };
+  });
+  const end = () => { look.drag = false; last = null; };
+  dom.addEventListener('pointerup', end); dom.addEventListener('pointercancel', end);
+  addEventListener('keydown', e => { if (e.code === 'KeyC' && !(e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT'))) look.back = true; });
+  addEventListener('keyup', e => { if (e.code === 'KeyC') look.back = false; });
+  const bk = el.btnBack;
+  bk.addEventListener('pointerdown', e => { look.back = true; e.preventDefault(); });
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) bk.addEventListener(ev, () => { look.back = false; });
+})();
+
 // ---------- VR (WebXR) ----------
 ['vrBtn', 'vrHint'].forEach(id => { el[id] = $(id); });
 function exitVR() {
@@ -2068,7 +2385,6 @@ function exitVR() {
   vr.on = false; vr.session = null;
   renderer.setAnimationLoop(null);
   vr.rig.remove(camera); scene.remove(vr.rig); scene.add(camera);
-  camera.add(cockpit);
   camera.position.set(0, 3.7, 10); camera.rotation.set(0, 0, 0);
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
@@ -2084,7 +2400,7 @@ async function enterVR() {
     await renderer.xr.setSession(s);
     vr.session = s; vr.on = true;
     s.addEventListener('end', exitVR);
-    scene.add(vr.rig); vr.rig.add(camera); vr.rig.add(cockpit);
+    scene.add(vr.rig); vr.rig.add(camera);
     camera.position.set(0, 0, 0); camera.rotation.set(0, 0, 0);
     if (app.demo && Net.role !== 'client') el.startBtn.click();
     else if (app.menuOpen && app.P && app.P.alive) closeMenu();
@@ -2197,11 +2513,11 @@ el.codeInput.addEventListener('keydown', e => { if (e.code === 'Enter') Net.join
 el.leaveBtn.addEventListener('click', () => Net.leave());
 
 // ---------- сеть ----------
-Net.hello = () => ({ name: (cfg.name || '').trim() || 'Игрок', color: CAR_COLORS[cfg.color] });
+Net.hello = () => ({ name: (cfg.name || '').trim() || 'Игрок', color: CAR_COLORS[cfg.color], veh: cfg.veh });
 Net.getWelcome = () => ({
   cfg: { lanes: game.lanes, traffic: game.traffic, trucks: game.trucks },
   running: realRun(), z: app.P ? app.P.z : 0,
-  players: [{ id: 0, name: cfg.name, color: CAR_COLORS[cfg.color] }].concat(Net.playerList()),
+  players: [{ id: 0, name: cfg.name, color: CAR_COLORS[cfg.color], veh: cfg.veh }].concat(Net.playerList()),
 });
 Net.onStatus = (html, kind) => { el.netStatus.innerHTML = html; el.netStatus.className = kind || ''; };
 Net.onPlayers = () => { updateNetUI(); renderPlayers(); };
