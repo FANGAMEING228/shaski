@@ -183,6 +183,16 @@
   .seg.sm { flex-wrap: wrap; margin-bottom: 8px; }
   .seg.sm button { padding: 6px 9px; font-size: 13px; }
   #menu input[type=color] { width: 54px; height: 32px; padding: 0; border: 1px solid rgba(255,255,255,.22); border-radius: 8px; background: #23253a; cursor: pointer; }
+  #fuelHud { position: absolute; bottom: 26px; left: calc(50% + 90px); z-index: 5; display: flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); font-size: 12px; pointer-events: none; }
+  #fuelHud .fbar { width: 64px; height: 8px; border-radius: 4px; background: rgba(255,255,255,.14); overflow: hidden; }
+  #fuelHud .fbar i { display: block; height: 100%; width: 100%; background: #5bd66f; transition: width .2s; }
+  #fuelHud.low .fbar i { background: #ff4d4d; } #fuelHud.mid .fbar i { background: #ffb347; }
+  #fuelHud.low { animation: fblink .8s infinite; } @keyframes fblink { 50% { opacity: .45; } }
+  #stPanel { position: absolute; bottom: 168px; left: 50%; transform: translateX(-50%); z-index: 6; display: none; flex-direction: column; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); font-size: 14px; text-align: center; max-width: 92vw; }
+  #stPanel .stBtns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  #stPanel button { padding: 9px 14px; border-radius: 10px; border: 1px solid var(--line); background: #2b2f4a; color: #fff; font-size: 14px; cursor: pointer; }
+  #stPanel button.go { background: #2f8f4e; } #stPanel button.dis { opacity: .4; }
+  #stWalk { position: absolute; bottom: 110px; left: 110px; z-index: 6; display: none; width: 76px; height: 76px; border-radius: 50%; border: 1px solid var(--line); background: rgba(43,47,74,.85); color: #fff; font-size: 30px; touch-action: none; }
   #lightFx { position: absolute; inset: 0; z-index: 3; pointer-events: none; background: #e8f0ff; opacity: 0; }
   #glassFx { position: absolute; inset: 0; z-index: 3; pointer-events: none; width: 100%; height: 100%; display: none; }
   #speedFx { position: absolute; inset: 0; z-index: 3; pointer-events: none; opacity: 0;
@@ -197,6 +207,9 @@
   <div id="speedFx"></div>
   <div id="lightFx"></div>
   <canvas id="glassFx"></canvas>
+  <div id="fuelHud" style="display:none"><span>⛽</span><div class="fbar"><i id="fuelBar"></i></div><b id="fuelTxt">100%</b></div>
+  <div id="stPanel"><div id="stInfo"></div><div class="stBtns"><button id="stMain" class="go"></button><button id="stCar"></button></div></div>
+  <button id="stWalk">▲</button>
 
   <div id="hud">
     <div class="center">
@@ -210,7 +223,7 @@
   <div id="netBadge"></div>
   <div id="bottomRight">
     <div id="gamepadStatus" class="kb">⌨️ управление: клавиатура / тач</div>
-    <div class="keys">← → руль · W газ · S тормоз<br>Q / E — скорость −10 / +10 км/ч<br>V — вид · Esc — меню</div>
+    <div class="keys">← → руль · W газ · S тормоз<br>Q / E — скорость −10 / +10 км/ч<br>V — вид · Esc — меню<br>F — АЗС / заправка · G — выйти из машины</div>
   </div>
 
   <div id="touchCtrls">
@@ -1855,6 +1868,7 @@ function buildRoad(lanes) {
 
   world.barriers = [tot / 2 + 0.3, -(tot / 2 + 0.3), world.oncX + tot / 2 + 0.3, world.oncX - tot / 2 - 0.3].map(x => add(grp, GEO.barrier, M.concrete, x, 0.47, 0));
 
+  world.barrierR2 = add(grp, GEO.barrier, M.concrete, tot / 2 + 0.3, 0.47, 0);
   world.lamps = Array.from({ length: 18 }, () => { const l = makeLamp(); l.position.x = world.medX; grp.add(l); return l; });
 
   world.treesR = Array.from({ length: 48 }, (_, i) => { const t = makeTree(i % 3); grp.add(t); return t; });
@@ -1919,6 +1933,7 @@ function updateWorld(pz, dt) {
   S = 520; N = world.gantries.length; base = Math.floor(pz / S);
   for (let k = 0; k < N; k++) { const idx = base + 1 - k; world.gantries[mod(idx, N)].position.z = idx * S; }
 
+  updateStationWorld(pz);
   for (const o of world.oncoming) {
     if (!o.init) { o.z = pz - rnd(0, 700); o.init = true; }
     o.z += o.v * dt;
@@ -2913,6 +2928,318 @@ addEventListener('keydown', e => {
   addEventListener('keyup', e => { if (e.code === 'Space' || e.code === 'KeyB') hop.hold = false; });
 }
 
+
+// ---------- АЗС: заправка, выход из машины ----------
+const ST_S = 3000, ST_OFF = 1500, ST_HALF = 92, ST_GAP = 85;
+const stationZ = pz => Math.floor((pz + 150 + ST_OFF) / ST_S) * ST_S - ST_OFF;
+const gs = { P: null, mode: 'drive', zs: 0, fuel: 1, fueling: false, safe: 0, vcap: 20, empty: 0, near: false, warned: false, walkHold: false, tick: 0,
+  w: { x: 0, z: 0, yaw: 0, ph: 0, moving: false }, orb: { yaw: Math.PI / 2, pitch: 0.3, dist: 6 } };
+const stationG = new THREE.Group();
+scene.add(stationG);
+const stGlows = [];
+function stMat(c) { return new THREE.MeshLambertMaterial({ color: c }); }
+function stBox(p, w, h, d, c, x, y, z, basic) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), basic ? new THREE.MeshBasicMaterial({ color: c }) : stMat(c));
+  m.position.set(x, y, z); p.add(m); return m;
+}
+function stCanvas(w, h, fn) { const c = document.createElement('canvas'); c.width = w; c.height = h; fn(c.getContext('2d'), w, h); return new THREE.CanvasTexture(c); }
+function stBoard(txt1, txt2, bg) {
+  return stCanvas(256, 128, (g, w, h) => {
+    g.fillStyle = bg; g.fillRect(0, 0, w, h); g.strokeStyle = '#fff'; g.lineWidth = 6; g.strokeRect(5, 5, w - 10, h - 10);
+    g.fillStyle = '#fff'; g.textAlign = 'center'; g.font = 'bold 54px sans-serif'; g.fillText(txt1, w / 2, 62);
+    g.font = 'bold 34px sans-serif'; g.fillText(txt2, w / 2, 105);
+  });
+}
+function stPlane(p, tex, w, h, x, y, z, ry) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex }));
+  m.position.set(x, y, z); m.rotation.y = ry || 0; p.add(m); return m;
+}
+const pumpHose = (() => {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(17 * 3), 3));
+  const l = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x111111 }));
+  l.frustumCulled = false; l.visible = false; scene.add(l); return l;
+})();
+(function buildStation() {
+  const g = stationG;
+  const shape = new THREE.Shape();
+  shape.moveTo(0, -ST_HALF); shape.lineTo(30, -50); shape.lineTo(30, 50); shape.lineTo(0, ST_HALF); shape.lineTo(0, -ST_HALF);
+  const ap = new THREE.Mesh(new THREE.ShapeGeometry(shape), stMat(0x4b4e55));
+  ap.rotation.x = -Math.PI / 2; ap.position.y = 0.04; g.add(ap);
+  stBox(g, 12, 0.05, 25, 0x9a9da4, 12.5, 0.07, 0);
+  for (const z of [-30, -20, 20, 30]) stBox(g, 4, 0.02, 0.15, 0xffffff, 24, 0.075, z, true);
+  // навес
+  stBox(g, 12, 0.55, 25, 0xd8352f, 12.5, 5.3, 0);
+  stBox(g, 12.2, 0.2, 25.2, 0xffffff, 12.5, 5.0, 0);
+  const under = new THREE.Mesh(new THREE.PlaneGeometry(11.6, 24.6), new THREE.MeshBasicMaterial({ color: 0xfff1cf }));
+  under.rotation.x = Math.PI / 2; under.position.set(12.5, 4.88, 0); g.add(under);
+  for (const x of [7.4, 17.6]) for (const z of [-11, 11]) stBox(g, 0.5, 4.9, 0.5, 0xe8e8ea, x, 2.45, z);
+  for (const x of [7, 18]) for (const z of [-12, 12]) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.glow, color: 0xfff0c8, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending, fog: false })); s.scale.set(7, 7, 1); s.position.set(x, 4.6, z); s.visible = false; g.add(s); stGlows.push(s); }
+  // остров и колонки
+  stBox(g, 1.5, 0.25, 18, 0xb9bcc2, 12.8, 0.13, 0);
+  for (const z of [-3.7, 3.7]) {
+    stBox(g, 0.9, 1.7, 0.55, 0xf4f4f4, 12.8, 1.1, z);
+    stBox(g, 0.92, 0.35, 0.57, 0xd8352f, 12.8, 1.5, z);
+    stBox(g, 0.02, 0.35, 0.4, 0x38e08c, 12.34, 1.12, z, true);
+    stBox(g, 0.18, 0.4, 0.14, 0x222222, 12.3, 0.8, z);
+  }
+  // магазин
+  stBox(g, 7.4, 4, 14.4, 0xdadde3, 25, 2, -27);
+  stBox(g, 8, 0.4, 15, 0x8a2b2b, 25, 4.2, -27);
+  stPlane(g, stCanvas(256, 128, (c, w, h) => { c.fillStyle = '#bfe7ff'; c.fillRect(0, 0, w, h); c.fillStyle = '#fff'; c.fillRect(0, 0, w, 6); c.fillStyle = '#d8352f'; c.font = 'bold 40px sans-serif'; c.textAlign = 'center'; c.fillText('МАГАЗИН', w / 2, 80); }), 12, 2.4, 21.28, 2.2, -27, -Math.PI / 2);
+  // стела с ценами
+  stBox(g, 0.5, 9, 0.5, 0x777b84, 2.5, 4.5, 40);
+  stBox(g, 3.6, 3.7, 0.4, 0x222222, 2.5, 9.6, 40);
+  const pt = stCanvas(256, 256, (c, w, h) => { c.fillStyle = '#d8352f'; c.fillRect(0, 0, w, 90); c.fillStyle = '#fff'; c.textAlign = 'center'; c.font = 'bold 64px sans-serif'; c.fillText('АЗС', w / 2, 66); c.fillStyle = '#101218'; c.fillRect(0, 90, w, 166); c.fillStyle = '#ffd24a'; c.font = 'bold 40px monospace'; c.fillText('95   52.9', w / 2, 140); c.fillText('98   58.4', w / 2, 188); c.fillText('ДТ   55.1', w / 2, 236); });
+  stPlane(g, pt, 3.4, 3.4, 2.5, 9.6, 40.22, 0); stPlane(g, pt, 3.4, 3.4, 2.5, 9.6, 39.78, Math.PI);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.glow, color: 0xfff0c8, transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending, fog: false })); s.scale.set(9, 9, 1); s.position.set(2.5, 9.6, 41); s.visible = false; g.add(s); stGlows.push(s);
+  // указатели заранее
+  for (const [d, txt] of [[1000, '1 км'], [500, '500 м']]) {
+    const tx = stBoard('АЗС', txt, '#1b5fb5');
+    stBox(g, 0.2, 3.2, 0.2, 0x888888, 1.6, 1.6, d);
+    stPlane(g, tx, 3.2, 1.6, 1.6, 3.6, d + 0.12, 0);
+  }
+})();
+
+// пешеход
+const walker = (() => {
+  const g = new THREE.Group();
+  const part = (w, h, d, c, y) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), stMat(c)); m.position.y = y; return m; };
+  const mkLimb = (x, y, w, h, d, c, off) => { const p = new THREE.Group(); p.position.set(x, y, 0); p.add(part(w, h, d, c, off)); g.add(p); return p; };
+  const legL = mkLimb(-0.11, 0.86, 0.18, 0.86, 0.2, 0x2a2f45, -0.43), legR = mkLimb(0.11, 0.86, 0.18, 0.86, 0.2, 0x2a2f45, -0.43);
+  const torso = part(0.46, 0.6, 0.26, 0x2b5fb8, 1.17); g.add(torso);
+  const armL = mkLimb(-0.31, 1.44, 0.13, 0.6, 0.14, 0x2b5fb8, -0.28), armR = mkLimb(0.31, 1.44, 0.13, 0.6, 0.14, 0x2b5fb8, -0.28);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 10), stMat(0xe0b48c)); head.position.y = 1.66; g.add(head);
+  g.add(part(0.31, 0.1, 0.31, 0x2b2118, 1.78));
+  g.userData = { legL, legR, armL, armR };
+  g.visible = false; scene.add(g); return g;
+})();
+
+function fuelCap() { const V = VEH[VEH_I]; return V.id === 'moped' ? 7 : V.len > 5 ? 90 : V.accel > 1.3 ? 70 : 55; }
+function stAhead(P) { let z0 = stationZ(P.z); if (P.z - z0 < 130) z0 -= ST_S; return z0; }
+function resetStation(P) {
+  gs.P = P; gs.mode = 'drive'; gs.fuel = 1; gs.fueling = false; gs.safe = 0; gs.empty = 0; gs.warned = false; gs.walkHold = false;
+  walker.visible = false; pumpHose.visible = false;
+}
+function smooth01(u) { return u * u * (3 - 2 * u); }
+
+function updateStationWorld(pz) {
+  const zs = gs.mode !== 'drive' ? gs.zs : stationZ(pz), xe = world.tot / 2;
+  stationG.position.set(xe, 0, zs);
+  const lo = zs - ST_HALF, hi = zs + ST_HALF, a0 = pz - 360, a1 = pz + 360;
+  const b1 = world.barriers[0], b2 = world.barrierR2;
+  if (hi <= a0 || lo >= a1) { b1.visible = true; b1.scale.z = 1; b1.position.z = pz; b2.visible = false; }
+  else {
+    const l1 = Math.min(a1, lo) - a0, s2 = Math.max(a0, hi), l2 = a1 - s2;
+    b1.visible = l1 > 0.5; b1.scale.z = Math.max(0.001, l1 / 720); b1.position.z = a0 + l1 / 2;
+    b2.visible = l2 > 0.5; b2.scale.z = Math.max(0.001, l2 / 720); b2.position.z = s2 + l2 / 2;
+  }
+  const near = z => Math.abs(z - zs) < ST_HALF + 6;
+  for (const tr of world.treesR) tr.visible = !near(tr.position.z) || tr.position.x > xe + 60;
+  for (let i = 0; i < 40; i++) world.posts[i].visible = !near(world.posts[i].position.z);
+  const night = hemi.intensity < 0.55;
+  for (const s of stGlows) s.visible = night;
+}
+
+function walkBlocked(x, z, P) {
+  const lx = x - world.tot / 2, lz = z - gs.zs, R = 0.3;
+  if (lx < 0.8 || lx > 29 || lz < -44 || lz > 44) return true;
+  if (lx > 12.1 - R && lx < 13.5 + R && lz > -9 - R && lz < 9 + R) return true;
+  if (lx > 21.3 - R && lx < 28.7 + R && lz > -34.3 - R && lz < -19.7 + R) return true;
+  if (Math.abs(x - P.x) < 0.95 + R && Math.abs(z - P.z) < 2.4 + R) return true;
+  return false;
+}
+
+function stationDrive(P, dt) {
+  const zs = gs.zs, xe = world.tot / 2, xr = laneX(game.lanes - 1), xp = xe + 10.9, zp = zs - 5, z = P.z;
+  let v = P.v, xd, slope = 0, finished = false;
+  if (gs.mode === 'in') {
+    const zA = zs + ST_GAP, zB = zp + 12, L = zA - zB, dist = Math.max(0, z - zp);
+    const vlim = dist > 0.25 ? Math.max(Math.sqrt(2 * 3.2 * dist), 1.6) : 0;
+    if (v > vlim) v = Math.max(vlim, v - 9 * dt); else v = Math.min(vlim, gs.vcap, v + 3 * dt);
+    if (z > zA) { xd = xr; P.x += clamp(xd - P.x, -2 * dt, 2 * dt); }
+    else {
+      const u = clamp((zA - z) / L, 0, 1);
+      xd = xr + (xp - xr) * smooth01(u); slope = (xp - xr) * 6 * u * (1 - u) / L;
+      P.x += (xd - P.x) * Math.min(1, dt * 6);
+    }
+    if (dist <= 0.25 && v < 0.6) { finished = true; }
+  } else {
+    const zA = zp - 8, zB = zs - ST_GAP, L = zA - zB;
+    v = Math.min(P.v + 3.2 * dt, 22);
+    if (z > zA) { xd = xp; }
+    else {
+      const u = clamp((zA - z) / L, 0, 1);
+      xd = xp + (xr - xp) * smooth01(u); slope = (xr - xp) * 6 * u * (1 - u) / L;
+      P.x += (xd - P.x) * Math.min(1, dt * 6);
+    }
+    if (z <= zB) { gs.mode = 'drive'; gs.safe = 3; P.x = xr; P.yaw = 0; return; }
+  }
+  const yawT = Math.atan(slope);
+  P.yaw += (yawT - P.yaw) * Math.min(1, dt * 6);
+  P.aLong = clamp((v - P.v) / Math.max(dt, 1e-3), -9, 4); P.aLat = 0; P.steer = clamp(yawT * 2.2, -1, 1); P.scrape = false;
+  P.v = v; P.z -= v * Math.cos(P.yaw) * dt;
+  if (finished) { P.v = 0; P.z = zp; P.x = xp; P.yaw = 0; P.aLong = 0; gs.mode = 'park'; gs.fueling = gs.fuel < 0.999; if (gs.fueling) toast('⛽ Заправка…'); }
+}
+
+function stationStep(P, inp, dt) {
+  if (gs.P !== P) resetStation(P);
+  if (app.demo || vr.on || !P.alive) { if (gs.mode !== 'drive') { gs.mode = 'drive'; walker.visible = false; pumpHose.visible = false; } return false; }
+  if (gs.safe > 0) gs.safe -= dt;
+  const m = gs.mode;
+  if (m === 'drive') {
+    if (!admin.god) { const v = P.v; gs.fuel = Math.max(0, gs.fuel - (0.01 + 0.0015 * v + 0.00006 * v * v) / 60 * dt); }
+    if (gs.fuel < 0.15 && !gs.warned) { gs.warned = true; toast('⛽ Мало топлива — ищи АЗС'); }
+    if (gs.fuel > 0.3) gs.warned = false;
+    if (gs.fuel <= 0) {
+      inp.throttle = 0; P.target = 0;
+      if (P.v < 0.4) {
+        gs.empty += dt;
+        if (gs.empty > 2.5) {
+          gs.empty = 0; const z0 = stAhead(P), old = P.z;
+          gs.zs = z0; P.z = z0 + ST_GAP; P.startZ -= old - P.z; P.x = laneX(game.lanes - 1); P.v = 9; P.yaw = 0; gs.vcap = 9; gs.fuel = 0.08; gs.mode = 'in';
+          toast('🚚 Эвакуатор довёз до АЗС');
+        }
+      } else if (!gs.emptyToast) { gs.emptyToast = true; toast('⛽ Бензин закончился!'); }
+    } else gs.emptyToast = false;
+    return false;
+  }
+  if (m === 'in' || m === 'out') { stationDrive(P, dt); return true; }
+  P.v = 0; P.aLong = 0; P.aLat = 0; P.steer = 0; P.scrape = false; P.yaw = 0;
+  if (gs.fueling) {
+    gs.fuel = Math.min(1, gs.fuel + 0.12 * dt);
+    gs.tick -= dt; if (gs.tick <= 0) { gs.tick = 0.5; Snd.burst(0.1, 900, 0.1); }
+    if (gs.fuel >= 1) { gs.fueling = false; gs.warned = false; Snd.burst(0.2, 1300, 0.3); toast('⛽ Бак полон'); }
+  }
+  if (m === 'walk') {
+    const w = gs.w, o = gs.orb;
+    if (touch.left) o.yaw -= 1.8 * dt;
+    if (touch.right) o.yaw += 1.8 * dt;
+    const fw = (keys.KeyW || keys.ArrowUp || gs.walkHold ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
+    const st = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
+    let dx = Math.sin(o.yaw) * fw + Math.cos(o.yaw) * st, dz = -Math.cos(o.yaw) * fw + Math.sin(o.yaw) * st;
+    const len = Math.hypot(dx, dz);
+    w.moving = len > 0.01;
+    if (w.moving) {
+      const sp = (keys.ShiftLeft || keys.ShiftRight ? 4.6 : 2.2) * dt;
+      dx = dx / len * sp; dz = dz / len * sp;
+      if (!walkBlocked(w.x + dx, w.z + dz, P)) { w.x += dx; w.z += dz; }
+      else if (!walkBlocked(w.x + dx, w.z, P)) w.x += dx;
+      else if (!walkBlocked(w.x, w.z + dz, P)) w.z += dz;
+      let tgt = Math.atan2(dx, -dz), d = tgt - w.yaw;
+      d = Math.atan2(Math.sin(d), Math.cos(d)); w.yaw += d * Math.min(1, dt * 10);
+      w.ph += sp * 3.6;
+    }
+    gs.near = Math.hypot(w.x - (P.x - 1.2), w.z - P.z) < 2.8;
+  }
+  return true;
+}
+
+function walkView(P, dt, t) {
+  const rider = playerMesh.userData && playerMesh.userData.rider;
+  playerMesh.visible = true; if (rider) rider.visible = false;
+  playerMesh.position.set(P.x, 0, P.z); playerMesh.rotation.set(0, -P.yaw, 0);
+  headlights.position.set(P.x, 0, P.z); headlights.rotation.y = -P.yaw;
+  animateCar(playerMesh, 0, dt, 0); setBrakeLights(playerMesh, false);
+  cabin.visible = false; mirrorOn = false;
+  if (gaugeEl.style.visibility !== 'hidden') gaugeEl.style.visibility = 'hidden';
+  const w = gs.w, o = gs.orb, c = Math.cos(o.pitch), tx = w.x, ty = 1.35, tz = w.z;
+  if (Math.abs(camera.fov - 55) > 0.05) { camera.fov = 55; camera.updateProjectionMatrix(); }
+  camera.position.set(tx - Math.sin(o.yaw) * o.dist * c, Math.max(0.35, ty + Math.sin(o.pitch) * o.dist), tz + Math.cos(o.yaw) * o.dist * c);
+  camera.lookAt(tx, ty, tz);
+  skyDome.position.copy(camera.position); stars.position.copy(camera.position);
+}
+
+function updateStationView(P, dt) {
+  const parked = gs.mode === 'walk' || gs.mode === 'park';
+  const wk = gs.mode === 'walk';
+  walker.visible = wk;
+  if (wk) {
+    const w = gs.w, u = walker.userData, sw = w.moving ? Math.sin(w.ph) * 0.8 : 0;
+    walker.position.set(w.x, 0, w.z); walker.rotation.y = -w.yaw;
+    u.legL.rotation.x = sw; u.legR.rotation.x = -sw; u.armL.rotation.x = -sw * 0.8; u.armR.rotation.x = sw * 0.8;
+  }
+  if (parked && gs.fueling) {
+    const xe = world.tot / 2, a = [xe + 12.35, 1.0, gs.zs - 3.7], b = [P.x + 0.92, 0.95, P.z + 1.3];
+    const pos = pumpHose.geometry.attributes.position.array;
+    for (let i = 0; i <= 16; i++) {
+      const k = i / 16, sag = Math.sin(k * Math.PI) * 0.8;
+      pos[i * 3] = a[0] + (b[0] - a[0]) * k; pos[i * 3 + 1] = a[1] + (b[1] - a[1]) * k - sag; pos[i * 3 + 2] = a[2] + (b[2] - a[2]) * k;
+    }
+    pumpHose.geometry.attributes.position.needsUpdate = true; pumpHose.visible = true;
+  } else pumpHose.visible = false;
+}
+
+const stEl = { hud: $('fuelHud'), bar: $('fuelBar'), txt: $('fuelTxt'), panel: $('stPanel'), info: $('stInfo'), main: $('stMain'), car: $('stCar'), walk: $('stWalk') };
+function stationUI(P) {
+  const on = app.running && !app.demo && !app.menuOpen && !vr.on && P.alive;
+  stEl.hud.style.display = on ? 'flex' : 'none';
+  if (!on) { stEl.panel.style.display = 'none'; stEl.walk.style.display = 'none'; return; }
+  const f = gs.fuel;
+  stEl.bar.style.width = (f * 100).toFixed(0) + '%'; stEl.txt.textContent = (f * fuelCap()).toFixed(0) + ' л';
+  stEl.hud.classList.toggle('low', f < 0.15); stEl.hud.classList.toggle('mid', f >= 0.15 && f < 0.3);
+  let show = false, info = '', main = '', car = '', carOk = true;
+  const m = gs.mode;
+  if (m === 'drive') {
+    const d = P.z - stAhead(P);
+    if (d <= 800) { show = true; info = '⛽ АЗС через ' + Math.round(d / 10) * 10 + ' м'; main = 'Заправиться (F)'; }
+  } else if (m === 'in') { show = true; info = 'Заезжаем на АЗС…'; main = 'Отмена (F)'; }
+  else if (m === 'park') { show = true; info = gs.fueling ? '⛽ Заправка: ' + Math.round(f * 100) + '%' : '⛽ Бак полон'; main = 'Ехать дальше (F)'; car = 'Выйти из машины (G)'; }
+  else if (m === 'walk') { show = true; info = (gs.fueling ? '⛽ Заправка: ' + Math.round(f * 100) + '% · ' : '') + 'WASD — ходить, Shift — бежать, мышь — камера, колесо — зум'; car = 'Сесть в машину (G)'; carOk = gs.near; }
+  stEl.panel.style.bottom = m === 'walk' ? '22px' : '';
+  stEl.panel.style.display = show ? 'flex' : 'none';
+  stEl.info.textContent = info;
+  stEl.main.style.display = main ? '' : 'none'; stEl.main.textContent = main;
+  stEl.car.style.display = car ? '' : 'none'; stEl.car.textContent = car; stEl.car.classList.toggle('dis', !carOk);
+  stEl.walk.style.display = m === 'walk' ? 'block' : 'none';
+}
+
+function stationMain() {
+  const P = app.P;
+  if (!P || !app.running || app.menuOpen || app.demo || vr.on || !P.alive) return;
+  if (gs.mode === 'drive') {
+    const z0 = stAhead(P);
+    if (P.z - z0 > 800) { toast('АЗС слишком далеко'); return; }
+    gs.zs = z0; gs.vcap = Math.max(P.v, 5); gs.mode = 'in';
+  } else if (gs.mode === 'in') { gs.mode = 'drive'; P.yaw = 0; }
+  else if (gs.mode === 'park') { gs.fueling = false; gs.mode = 'out'; if (gs.fuel < 0.02) toast('Бак почти пуст!'); }
+  else if (gs.mode === 'walk') toast('Сначала сядь в машину');
+}
+function stationCar() {
+  const P = app.P;
+  if (!P || !app.running || app.menuOpen || app.demo || vr.on || !P.alive) return;
+  if (gs.mode === 'park') {
+    const w = gs.w; w.x = P.x - 1.45; w.z = P.z - 0.1; w.yaw = Math.PI / 2; w.ph = 0; w.moving = false;
+    gs.orb.yaw = Math.PI / 2; gs.orb.pitch = 0.28; gs.orb.dist = 6; gs.mode = 'walk';
+  } else if (gs.mode === 'walk') {
+    if (!gs.near) { toast('Подойди ближе к машине'); return; }
+    gs.mode = 'park'; walker.visible = false; gaugeEl.style.visibility = '';
+    if (cfg.view === 'third' && gaugeEl.style.visibility === 'hidden') gaugeEl.style.visibility = '';
+  }
+}
+stEl.main.addEventListener('click', stationMain);
+stEl.car.addEventListener('click', stationCar);
+stEl.walk.addEventListener('pointerdown', e => { e.preventDefault(); gs.walkHold = true; });
+for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) stEl.walk.addEventListener(ev, () => { gs.walkHold = false; });
+addEventListener('keydown', e => {
+  const tag = e.target && e.target.tagName;
+  if (tag === 'INPUT' || tag === 'SELECT' || e.repeat) return;
+  if (e.code === 'KeyF') stationMain();
+  else if (e.code === 'KeyG') stationCar();
+});
+(function () {
+  const dom = renderer.domElement; let last = null;
+  dom.addEventListener('pointerdown', e => { if (gs.mode !== 'walk' || app.menuOpen) return; last = { x: e.clientX, y: e.clientY }; try { dom.setPointerCapture(e.pointerId); } catch (err) {} });
+  dom.addEventListener('pointermove', e => {
+    if (!last) return;
+    gs.orb.yaw -= (e.clientX - last.x) * 0.006; gs.orb.pitch = clamp(gs.orb.pitch + (e.clientY - last.y) * 0.005, -0.1, 1.3);
+    last = { x: e.clientX, y: e.clientY };
+  });
+  const end = () => { last = null; };
+  dom.addEventListener('pointerup', end); dom.addEventListener('pointercancel', end);
+  dom.addEventListener('wheel', e => { if (gs.mode === 'walk') gs.orb.dist = clamp(gs.orb.dist + e.deltaY * 0.005, 2.5, 14); }, { passive: true });
+})();
+
 // ---------- выбор транспорта ----------
 ['vehSeg', 'vehHint', 'btnBack'].forEach(id => { el[id] = $(id); });
 const ICON_META = { lanos: ['sedan', '#d23a2e'], vaz2107: ['boxy', '#d8c58a'], m2105: ['boxy', '#7aa36b'], supra: ['coupe', '#f2f2f2'], r34: ['coupe', '#1c3f9a'], civic: ['hatch', '#d23a2e'], mark2: ['sedan', '#2a2f44'] };
@@ -3194,7 +3521,7 @@ function step(dt) {
   const inp = readInput(dt);
   if (app.demo) { inp.steer = 0; inp.throttle = 0; inp.brake = 0; }
   P.target = cfg.targetKmh / 3.6;
-  P.god = admin.god;
+  P.god = admin.god || gs.mode !== 'drive' || gs.safe > 0;
 
   if (Net.role !== 'client') {
     const pls = allPlayers();
@@ -3204,7 +3531,7 @@ function step(dt) {
   extrapolate(dt);
 
   const wasAlive = P.alive;
-  stepPlayer(P, inp, dt);
+  if (!stationStep(P, inp, dt)) stepPlayer(P, inp, dt);
   const list = vehiclesNow();
   if (!app.demo) {
     collide(P, list);
@@ -3228,7 +3555,8 @@ function drawFrame(dt) {
   syncTraffic(vehiclesNow(), dt);
   syncRemotes(remotePlayers(), dt);
   updateWorld(P.z, dt);
-  updateView(P, dt, cfg.view, app.time);
+  if (gs.mode === 'walk') walkView(P, dt, app.time); else updateView(P, dt, cfg.view, app.time);
+  updateStationView(P, dt);
   updateWeather(P, dt, app.time);
   drawGauge(P.v * 3.6, cfg.targetKmh);
   Snd.update(P, app.demo || app.paused);
@@ -3243,6 +3571,7 @@ function drawFrame(dt) {
       el.subVal.textContent = Math.max(0, Math.round(P.startZ - P.z)) + ' м · обгонов ' + P.overtakes;
     }
     renderPlayers();
+    stationUI(P);
   }
   render();
 }
