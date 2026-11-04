@@ -193,6 +193,7 @@
   #stPanel button { padding: 9px 14px; border-radius: 10px; border: 1px solid var(--line); background: #2b2f4a; color: #fff; font-size: 14px; cursor: pointer; }
   #stPanel button.go { background: #2f8f4e; } #stPanel button.dis { opacity: .4; }
   #stWalk { position: absolute; bottom: 110px; left: 110px; z-index: 6; display: none; width: 76px; height: 76px; border-radius: 50%; border: 1px solid var(--line); background: rgba(43,47,74,.85); color: #fff; font-size: 30px; touch-action: none; }
+  #fadeFx { position: absolute; inset: 0; z-index: 50; pointer-events: none; background: #000; opacity: 0; }
   #lightFx { position: absolute; inset: 0; z-index: 3; pointer-events: none; background: #e8f0ff; opacity: 0; }
   #glassFx { position: absolute; inset: 0; z-index: 3; pointer-events: none; width: 100%; height: 100%; display: none; }
   #speedFx { position: absolute; inset: 0; z-index: 3; pointer-events: none; opacity: 0;
@@ -206,6 +207,7 @@
   <div id="flash"></div>
   <div id="speedFx"></div>
   <div id="lightFx"></div>
+  <div id="fadeFx"></div>
   <canvas id="glassFx"></canvas>
   <div id="fuelHud" style="display:none"><span>⛽</span><div class="fbar"><i id="fuelBar"></i></div><b id="fuelTxt">100%</b></div>
   <div id="stPanel"><div id="stInfo"></div><div class="stBtns"><button id="stMain" class="go"></button><button id="stCar"></button></div></div>
@@ -223,7 +225,7 @@
   <div id="netBadge"></div>
   <div id="bottomRight">
     <div id="gamepadStatus" class="kb">⌨️ управление: клавиатура / тач</div>
-    <div class="keys">← → руль · W газ · S тормоз<br>Q / E — скорость −10 / +10 км/ч<br>V — вид · Esc — меню<br>G — выйти из машины (на АЗС)</div>
+    <div class="keys">← → руль · W газ · S тормоз<br>Q / E — скорость −10 / +10 км/ч<br>V — вид · Esc — меню<br>G — выйти (АЗС)<br>T — из города на трассу</div>
   </div>
 
   <div id="touchCtrls">
@@ -249,6 +251,10 @@
     <button class="dbtn hidden" id="btnHop" title="Прыжок — гидравлика (пробел / B)">
       <svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#2b2f4a"/><path d="M16 5v12M10 11l6-6 6 6" fill="none" stroke="#7ee787" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 20l3 2-3 2 3 2-3 2M24 20l-3 2 3 2-3 2 3 2" fill="none" stroke="#dfe5ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span>Прыжок</span>
+    </button>
+    <button class="dbtn hidden" id="btnCity" title="Вернуться на трассу (T)">
+      <svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#2b2f4a"/><path d="M6 24h20M10 24V13h6v11M16 24V9h6v15" fill="none" stroke="#dfe5ff" stroke-width="2" stroke-linejoin="round"/><path d="M8 7l-3 3 3 3M5 10h9" fill="none" stroke="#7ee787" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Трасса</span>
     </button>
   </div>
   <div class="dock" id="dockR">
@@ -2131,9 +2137,12 @@ function updateView(P, dt, view, t) {
     camState.x += (P.x * 0.8 - camState.x) * Math.min(1, dt * 5);
     camState.z += (clamp(P.aLong, -7, 5) * 0.2 - camState.z) * Math.min(1, dt * 3);
     const sh = k * k * 0.014;
-    camera.position.set(camState.x + Math.sin(t * 27) * sh, V.cam[0] + k * 0.5 + Math.sin(t * 33) * sh + (P.scrape ? Math.sin(t * 80) * 0.04 : 0), P.z + V.cam[1] + k * 2 + camState.z);
-    camera.lookAt(P.x * 0.55 - P.yaw * 6, -0.6, P.z - 16);
-    camera.rotation.z += lean * 0.35;
+    if (city.on) cityCam(P, dt, V, k);
+    else {
+      camera.position.set(camState.x + Math.sin(t * 27) * sh, V.cam[0] + k * 0.5 + Math.sin(t * 33) * sh + (P.scrape ? Math.sin(t * 80) * 0.04 : 0), P.z + V.cam[1] + k * 2 + camState.z);
+      camera.lookAt(P.x * 0.55 - P.yaw * 6, -0.6, P.z - 16);
+      camera.rotation.z += lean * 0.35;
+    }
   }
   const eye = vr.on ? vr.rig.position : camera.position;
   skyDome.position.copy(eye); stars.position.copy(eye);
@@ -2849,7 +2858,7 @@ el.tuneReset.addEventListener('click', () => { cfg.tune = cleanTune({}); tuneCha
 
 
 // ---------- погода: дождь, гроза, снег ----------
-['wxSeg', 'btnHop', 'lightFx', 'glassFx'].forEach(id => { el[id] = $(id); });
+['wxSeg', 'btnHop', 'btnCity', 'lightFx', 'glassFx'].forEach(id => { el[id] = $(id); });
 const WX = {
   clear: { name: '☀ Ясно', gray: 0, dark: 1, fogK: 1, hemiK: 1, sunK: 1 },
   rain:  { name: '🌧 Дождь', gray: 0.65, dark: 0.78, fogK: 0.5, hemiK: 0.8, sunK: 0.3, wet: 1, rain: 1 },
@@ -3123,9 +3132,11 @@ function resetStation(P) {
 function smooth01(u) { return u * u * (3 - 2 * u); }
 
 function updateStationWorld(pz) {
-  const zs = gs.mode !== 'drive' ? gs.zs : stationZ(pz), xe = world.tot / 2;
-  stationG.position.set(xe, 0, zs);
-  const lo = zs - ST_HALF, hi = zs + ST_HALF, a0 = pz - 360, a1 = pz + 360;
+  const zs = gs.mode !== 'drive' ? gs.zs : stationZ(pz), xe = world.tot / 2, zr = rampZ(pz);
+  stationG.position.set(xe, 0, zs); rampG.position.set(xe, 0, zr);
+  const a0 = pz - 360, a1 = pz + 360, rn = Net.role === 'solo' && zr + 30 > a0 && zr - 70 < a1;
+  if (!city.on) rampG.visible = Net.role === 'solo';
+  const lo = rn ? zr - 70 : zs - ST_HALF, hi = rn ? zr + 30 : zs + ST_HALF;
   const b1 = world.barriers[0], b2 = world.barrierR2;
   if (hi <= a0 || lo >= a1) { b1.visible = true; b1.scale.z = 1; b1.position.z = pz; b2.visible = false; }
   else {
@@ -3133,7 +3144,7 @@ function updateStationWorld(pz) {
     b1.visible = l1 > 0.5; b1.scale.z = Math.max(0.001, l1 / 720); b1.position.z = a0 + l1 / 2;
     b2.visible = l2 > 0.5; b2.scale.z = Math.max(0.001, l2 / 720); b2.position.z = s2 + l2 / 2;
   }
-  const near = z => Math.abs(z - zs) < ST_HALF + 6;
+  const near = z => Math.abs(z - zs) < ST_HALF + 6 || (Net.role === 'solo' && z > zr - 75 && z < zr + 35);
   for (const tr of world.treesR) tr.visible = !near(tr.position.z) || tr.position.x > xe + 60;
   for (let i = 0; i < 40; i++) world.posts[i].visible = !near(world.posts[i].position.z);
   const night = hemi.intensity < 0.55;
@@ -3183,7 +3194,12 @@ function stationDrive(P, dt) {
 
 const fuelIc = () => VEH[VEH_I].electric ? '🔋' : '⛽', fuelVerb = () => VEH[VEH_I].electric ? 'Зарядка' : 'Заправка';
 function onApron(P) { const zs = gs.mode === 'drive' ? stationZ(P.z) : gs.zs, lx = P.x - world.tot / 2, lz = P.z - zs; return lx > -2.5 && lx < 30 && Math.abs(lz) < ST_HALF - 6; }
-STATION_EXT = z => { const zs = gs.mode === 'drive' ? stationZ(z) : gs.zs, lz = Math.abs(z - zs); return lz < ST_HALF ? Math.max(0, Math.min(28, 30 * (ST_HALF - lz) / 42 - 1.5)) : 0; };
+STATION_EXT = z => {
+  const zs = gs.mode === 'drive' ? stationZ(z) : gs.zs, lz = Math.abs(z - zs);
+  let e = lz < ST_HALF ? Math.max(0, Math.min(28, 30 * (ST_HALF - lz) / 42 - 1.5)) : 0;
+  if (!city.on && Net.role === 'solo') { const rl = z - rampZ(z); if (rl > -62 && rl < 26) e = Math.max(e, -1 + (25 - rl) * 0.3875 + 8); }
+  return e;
+};
 STATION_CLAMP = (P, dt) => {
   const zs = gs.mode === 'drive' ? stationZ(P.z) : gs.zs, lx = P.x - world.tot / 2, lz = P.z - zs;
   let mx = 1e9;
@@ -3306,7 +3322,8 @@ function stationUI(P) {
   stEl.hud.classList.toggle('low', f < 0.15); stEl.hud.classList.toggle('mid', f >= 0.15 && f < 0.3);
   let show = false, info = '', car = '', carOk = true;
   const m = gs.mode, ic = fuelIc();
-  if (m === 'drive') {
+  if (city.on) { if (gs.fueling) { show = true; info = ic + ' ' + fuelVerb() + ': ' + Math.round(f * 100) + '%'; } }
+  else if (m === 'drive') {
     if (onApron(P)) {
       show = true; car = 'Выйти из машины (G)'; carOk = P.v < 1.5;
       info = gs.fueling ? ic + ' ' + fuelVerb() + ': ' + Math.round(f * 100) + '%' : f >= 0.999 ? ic + (el_ ? ' Заряжен' : ' Бак полон') : 'Подъедь к колонке и остановись';
@@ -3332,6 +3349,7 @@ function stationMain() {
 }
 function stationCar() {
   const P = app.P;
+  if (city.on) { toast('Выйти из машины можно на АЗС трассы'); return; }
   if (!P || !app.running || app.menuOpen || app.demo || !P.alive) return;
   if (gs.mode === 'drive') {
     if (!onApron(P)) { toast('Выйти из машины можно на территории АЗС'); return; }
@@ -3344,6 +3362,8 @@ function stationCar() {
     gs.mode = 'drive'; walker.visible = false; gaugeEl.style.visibility = '';
   }
 }
+el.btnCity.addEventListener('click', () => { if (app.P) returnToHighway(app.P); el.btnCity.blur(); });
+addEventListener('keydown', e => { const tag = e.target && e.target.tagName; if (tag === 'INPUT' || tag === 'SELECT' || e.repeat) return; if (e.code === 'KeyT' && city.on && app.P) returnToHighway(app.P); });
 stEl.main.addEventListener('click', stationMain);
 stEl.car.addEventListener('click', stationCar);
 stEl.walk.addEventListener('pointerdown', e => { e.preventDefault(); gs.walkHold = true; });
@@ -3400,6 +3420,395 @@ function updateVrHud(P, dt) {
   for (const w of words) { if ((l1 + ' ' + w).length < 34 && !l2) l1 += (l1 ? ' ' : '') + w; else l2 += (l2 ? ' ' : '') + w; }
   g.fillText(l1, 24, 86); g.fillText(l2.slice(0, 40), 24, 120);
   h.tex.needsUpdate = true;
+}
+
+// ---------- ГОРОД: съезд с трассы через ~60 м, свой район с трафиком, светофорами и пешеходами ----------
+const RAMP_S = 6000, CITY_HW = 7, CITY_PITCH = 60, CITY_N = 7;
+const rampZ = pz => -75 - Math.max(0, Math.round((-75 - pz) / RAMP_S)) * RAMP_S;
+const cX = i => (i - 3) * CITY_PITCH, cZ = j => (j - 3) * CITY_PITCH;
+const CDIR = [[0, -1], [1, 0], [0, 1], [-1, 0]];                    // N, E, S, W
+const cRV = d => [-CDIR[d][1], CDIR[d][0]];                          // вектор «вправо» от направления движения
+const city = { on: false, built: false, group: null, boxes: [], ai: [], peds: [], heads: null, lightT: 0, t: 0, camYaw: 0, sv: 0, dir: 1, retZ: -75, emptyT: 0, blockMsg: 0, pad: null, mats: [] };
+const rampG = new THREE.Group();
+scene.add(rampG);
+(function buildRamp() {
+  const dx = 31, dz = -80, L = Math.hypot(dx, dz), nx = -dz / L, nz = dx / L, W = 4.6;
+  const A = [-1, 25], B = [30, -55], sh = new THREE.Shape();
+  const pt = (p, s) => [p[0] + nx * W * s, -(p[1] + nz * W * s)];
+  const c = [pt(A, -1), pt(A, 1), pt(B, 1), pt(B, -1)];
+  sh.moveTo(c[0][0], c[0][1]); for (let i = 1; i < 4; i++) sh.lineTo(c[i][0], c[i][1]); sh.closePath();
+  const m = new THREE.Mesh(new THREE.ShapeGeometry(sh), stMat(0x3c3f46));
+  m.rotation.x = -Math.PI / 2; m.position.y = 0.04; rampG.add(m);
+  for (const [d, a, b] of [[40, 'ГОРОД', '→ съезд'], [260, 'ГОРОД', '300 м']]) {
+    stBox(rampG, 0.2, 3.2, 0.2, 0x888888, 1.6, 1.6, d);
+    stPlane(rampG, stBoard(a, b, '#1b5fb5'), 3.2, 1.6, 1.6, 3.6, d + 0.12, 0);
+  }
+})();
+
+// --- сборщик статической геометрии (один меш вместо сотен) ---
+function MB() { return { p: [], n: [], u: [], c: [], i: [] }; }
+function mbBox(b, cx, cy, cz, w, h, d, col, tex) {
+  const x0 = cx - w / 2, x1 = cx + w / 2, y0 = cy - h / 2, y1 = cy + h / 2, z0 = cz - d / 2, z1 = cz + d / 2;
+  const r = ((col >> 16) & 255) / 255, g = ((col >> 8) & 255) / 255, bl = (col & 255) / 255;
+  const ou = tex ? Math.random() : 0, ov = tex ? Math.random() : 0;
+  const F = [
+    [[0, 0, 1], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], w],
+    [[0, 0, -1], [x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], w],
+    [[1, 0, 0], [x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], d],
+    [[-1, 0, 0], [x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], d],
+    [[0, 1, 0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0], 0],
+  ];
+  for (const f of F) {
+    const base = b.p.length / 3, top = f[0][1] === 1, a = tex && !top ? f[5] / 12 : 0, bb = tex && !top ? h / 14 : 0;
+    const uv = [[0, 0], [a, 0], [a, bb], [0, bb]];
+    for (let k = 0; k < 4; k++) {
+      b.p.push(f[k + 1][0], f[k + 1][1], f[k + 1][2]); b.n.push(f[0][0], f[0][1], f[0][2]); b.c.push(r, g, bl);
+      b.u.push(top || !tex ? 0.02 : uv[k][0] + ou, top || !tex ? 0.02 : uv[k][1] + ov);
+    }
+    b.i.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+}
+function mbMesh(b, mat) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(b.p), 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(b.n), 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(b.u), 2));
+  g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(b.c), 3));
+  g.setIndex(new THREE.BufferAttribute(new Uint32Array(b.i), 1));
+  const m = new THREE.Mesh(g, mat); m.frustumCulled = false; return m;
+}
+function facadeTex(lit) {
+  return stCanvas(256, 256, (g, w, h) => {
+    g.fillStyle = lit ? '#000' : '#f2f2f5'; g.fillRect(0, 0, w, h);
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      g.fillStyle = lit ? (Math.random() < 0.38 ? '#ffd98a' : '#000') : '#3b4658';
+      g.fillRect(c * 32 + 6, r * 32 + 7, 20, 18);
+    }
+  });
+}
+
+function buildCity() {
+  const G = new THREE.Group(); city.group = G; scene.add(G); G.visible = false;
+  let seed = 4242; const R = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+  const bld = MB(), flat = MB(), glow = MB(), HW = CITY_HW;
+  const ft = facadeTex(false), fe = facadeTex(true);
+  [ft, fe].forEach(x => { x.wrapS = x.wrapT = THREE.RepeatWrapping; });
+  city.facadeMat = new THREE.MeshLambertMaterial({ map: ft, emissiveMap: fe, emissive: 0xffffff, vertexColors: true });
+  city.facadeMat.emissiveIntensity = 0;
+  const flatMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true });
+  // земля
+  mbBox(flat, 0, -0.3, 30, 900, 0.5, 900, 0x73777c);
+  const PAL = [0xc9ccd4, 0xb7a89a, 0xd6cfc0, 0x9aa7b8, 0xb8c4c0, 0xcfa58f, 0x8d95a3];
+  const gasBlock = (bi, bj) => bi === 2 && bj === 5;
+  // кварталы (включая внешнее кольцо и ряд у въезда)
+  for (let bi = -1; bi <= 6; bi++) for (let bj = -1; bj <= 6; bj++) {
+    const x0 = cX(bi) + HW, x1 = cX(bi + 1) - HW, z0 = cZ(bj) + HW, z1 = bj === 6 ? 293 : cZ(bj + 1) - HW;
+    const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2, w = x1 - x0, d = z1 - z0;
+    const gas = gasBlock(bi, bj);
+    mbBox(flat, mx, 0.07, mz, w, 0.16, d, gas ? 0x3d4046 : 0x9a9da3);          // тротуар / площадка
+    // фонари по периметру
+    for (const [lx, lz] of [[x0 + 1, mz], [x1 - 1, mz], [mx, z0 + 1], [mx, z1 - 1]]) {
+      mbBox(flat, lx, 3.2, lz, 0.18, 6.2, 0.18, 0x55595f); mbBox(glow, lx, 6.3, lz, 0.5, 0.2, 0.5, 0xfff0c0);
+    }
+    if (gas) { city.gasBlock = { x0, x1, z0, z1, mx, mz }; continue; }
+    // участки 2x2
+    const lw = (w - 6 - 2) / 2, ld = (d - 6 - 2) / 2;
+    for (let a = 0; a < 2; a++) for (let c = 0; c < 2; c++) {
+      const cx = x0 + 3 + lw / 2 + a * (lw + 2), cz = z0 + 3 + ld / 2 + c * (ld + 2), r = R();
+      const dist = Math.hypot(cx, cz) / 260;
+      if (r < 0.14) {                                                        // сквер с деревьями
+        mbBox(flat, cx, 0.2, cz, lw, 0.1, ld, 0x4f9a46);
+        for (let k = 0; k < 4; k++) {
+          const tx = cx + (R() - 0.5) * (lw - 4), tz = cz + (R() - 0.5) * (ld - 4);
+          mbBox(flat, tx, 1.4, tz, 0.4, 2.4, 0.4, 0x6b4a2b); mbBox(flat, tx, 3.6, tz, 2.6, 2.4, 2.6, 0x2f8a3c);
+        }
+      } else {
+        const h = r < 0.3 ? 5 + R() * 4 : 9 + R() * 28 * (1.15 - Math.min(0.9, dist)) + (R() < 0.12 ? 22 : 0);
+        const col = PAL[Math.floor(R() * PAL.length)];
+        mbBox(bld, cx, 0.1 + h / 2, cz, lw, h, ld, col, true);
+        mbBox(flat, cx, h + 0.45, cz, lw * 0.8, 0.5, ld * 0.8, 0x6d6f75);
+        city.boxes.push({ x0: cx - lw / 2, x1: cx + lw / 2, z0: cz - ld / 2, z1: cz + ld / 2 });
+      }
+    }
+  }
+  // дороги
+  const asph = 0x3a3d43, line = 0xe8e8e0;
+  for (let j = 0; j < CITY_N; j++) mbBox(flat, 0, 0.03, cZ(j), 360 + 2 * HW, 0.04, 2 * HW, asph);
+  for (let i = 0; i < CITY_N; i++) {
+    const z1 = i === 3 ? 300 : cZ(6) + HW;
+    mbBox(flat, cX(i), 0.031, (cZ(0) - HW + z1) / 2, 2 * HW, 0.04, z1 - cZ(0) + HW, asph);
+  }
+  // разметка и зебры
+  const dash = (x, z, alongX) => mbBox(flat, x, 0.06, z, alongX ? 3 : 0.18, 0.02, alongX ? 0.18 : 3, line);
+  for (let j = 0; j < CITY_N; j++) for (let s = cX(0); s < cX(6); s += CITY_PITCH) for (let k = HW + 4; k < CITY_PITCH - HW - 2; k += 8) dash(s + k, cZ(j), true);
+  for (let i = 0; i < CITY_N; i++) for (let s = cZ(0); s < cZ(6); s += CITY_PITCH) for (let k = HW + 4; k < CITY_PITCH - HW - 2; k += 8) dash(cX(i), s + k, false);
+  for (let z = cZ(6) + HW + 4; z < 296; z += 8) dash(cX(3), z, false);
+  for (let i = 0; i < CITY_N; i++) for (let j = 0; j < CITY_N; j++) {
+    const cx = cX(i), cz = cZ(j);
+    for (let d = 0; d < 4; d++) {
+      const [dx, dz] = CDIR[d], ni = i + dx, nj = j + dz;
+      if (!((ni >= 0 && ni < CITY_N && nj >= 0 && nj < CITY_N) || (i === 3 && j === 6 && d === 2))) continue;
+      for (let s = -HW + 1; s <= HW - 1; s += 1.7) {
+        if (dx === 0) mbBox(flat, cx + s, 0.06, cz + dz * (HW + 2.2), 0.7, 0.02, 3, line);
+        else mbBox(flat, cx + dx * (HW + 2.2), 0.06, cz + s, 3, 0.02, 0.7, line);
+      }
+    }
+    // столбы светофоров
+    for (const [sx, sz] of [[1, 1], [-1, -1], [1, -1], [-1, 1]]) mbBox(flat, cx + sx * (HW + 1.2), 2.6, cz + sz * (HW + 1.2), 0.2, 5.2, 0.2, 0x3a3d43);
+  }
+  // АЗС в городе
+  const gb = city.gasBlock;
+  if (gb) {
+    const cx = gb.mx, cz = gb.mz;
+    mbBox(flat, cx, 5.4, cz, 16, 0.5, 12, 0xd8352f); mbBox(glow, cx, 5.1, cz, 15.4, 0.1, 11.4, 0xfff1cf);
+    for (const [px, pz] of [[-7, -5], [7, -5], [-7, 5], [7, 5]]) mbBox(flat, cx + px, 2.6, cz + pz, 0.5, 5.2, 0.5, 0xe8e8ea);
+    mbBox(flat, cx, 0.3, cz, 11, 0.25, 1.4, 0xb9bcc2);
+    for (const px of [-3, 3]) { mbBox(flat, cx + px, 1.1, cz, 0.55, 1.7, 0.9, 0xf4f4f4); mbBox(flat, cx + px, 1.5, cz, 0.57, 0.35, 0.92, 0xd8352f); }
+    mbBox(flat, gb.x0 + 5, 2, gb.z1 - 5.5, 8, 4, 8, 0xdadde3); mbBox(flat, gb.x0 + 5, 4.2, gb.z1 - 5.5, 8.6, 0.4, 8.6, 0x8a2b2b);
+    mbBox(flat, gb.x1 - 1.5, 4.5, gb.z0 + 3, 0.5, 9, 0.5, 0x777b84);
+    city.boxes.push({ x0: cx - 5.7, x1: cx + 5.7, z0: cz - 0.8, z1: cz + 0.8 }, { x0: gb.x0 + 1, x1: gb.x0 + 9, z0: gb.z1 - 9.5, z1: gb.z1 - 1.5 });
+    city.pad = { x0: cx - 8, x1: cx + 8, z0: cz - 5.5, z1: cz + 5.5 };
+    const sg = stPlane(G, stBoard('АЗС', '95 · 98 · ДТ', '#d8352f'), 4, 2, gb.x1 - 1.5, 8.6, gb.z0 + 3.3, 0); sg.material.side = THREE.DoubleSide;
+  }
+  G.add(mbMesh(flat, flatMat)); G.add(mbMesh(bld, city.facadeMat)); G.add(mbMesh(glow, glowMat));
+  // ворота возврата
+  const gate = stPlane(G, stBoard('ТРАССА', '↓', '#1b5fb5'), 6, 3, 0, 7, 292, Math.PI); gate.material.side = THREE.DoubleSide;
+  // светофоры (головки)
+  const hg = new THREE.SphereGeometry(0.34, 8, 6), hm = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const heads = new THREE.InstancedMesh(hg, hm, CITY_N * CITY_N * 4); heads.frustumCulled = false;
+  const mt = new THREE.Matrix4(); let n = 0; city.headIdx = [];
+  for (let i = 0; i < CITY_N; i++) for (let j = 0; j < CITY_N; j++) {
+    [[1, 1, 'ns'], [-1, -1, 'ns'], [1, -1, 'ew'], [-1, 1, 'ew']].forEach(([sx, sz, ax]) => {
+      mt.makeTranslation(cX(i) + sx * (HW + 1.2), 5.4, cZ(j) + sz * (HW + 1.2)); heads.setMatrixAt(n, mt);
+      heads.setColorAt(n, new THREE.Color(0x2ee86a)); city.headIdx.push([i, j, ax]); n++;
+    });
+  }
+  G.add(heads); city.heads = heads;
+  // ИИ-машины
+  for (let k = 0; k < 22; k++) {
+    const mesh = makeCarMesh(pick(CAR_COLORS), { lite: true, model: pick(CAR_MODELS) }); G.add(mesh);
+    const a = { mesh, v: 0, vt: rnd(8, 12), hold: 0 };
+    cityPlaceAi(a); city.ai.push(a);
+  }
+  // пешеходы
+  const pg = [new THREE.BoxGeometry(0.34, 0.8, 0.2), new THREE.BoxGeometry(0.44, 0.6, 0.24), new THREE.SphereGeometry(0.13, 8, 6)];
+  const pc = [0xc0392b, 0x2b5fb8, 0x2e8b57, 0xe0b030, 0x7a4fb5, 0x333333, 0xe9e9e9];
+  for (let k = 0; k < 30; k++) {
+    const g = new THREE.Group(), cl = pick(pc);
+    const legs = new THREE.Mesh(pg[0], stMat(0x2a2f45)); legs.position.y = 0.4;
+    const tor = new THREE.Mesh(pg[1], stMat(cl)); tor.position.y = 1.1;
+    const hd = new THREE.Mesh(pg[2], stMat(0xe0b48c)); hd.position.y = 1.55;
+    g.add(legs, tor, hd); G.add(g);
+    const axis = Math.random() < 0.5 ? 0 : 1, line = Math.floor(Math.random() * CITY_N), side = Math.random() < 0.5 ? -1 : 1;
+    city.peds.push({ g, axis, line, side, s: rnd(-170, 170), dir: Math.random() < 0.5 ? 1 : -1, sp: rnd(1.1, 1.7), ph: rnd(0, 6) });
+  }
+  city.built = true;
+}
+
+// --- ИИ-трафик по сетке ---
+const cityNode = (i, j) => [cX(i), cZ(j)];
+function citySeg(i, j, din, dout) {
+  const [cx, cz] = cityNode(i, j), dv = CDIR[din], dw = CDIR[dout], rv = cRV(din), rw = cRV(dout), HW = CITY_HW;
+  const p0 = [cx - dv[0] * HW + rv[0] * 3.5, cz - dv[1] * HW + rv[1] * 3.5], p1 = [cx + dw[0] * HW + rw[0] * 3.5, cz + dw[1] * HW + rw[1] * 3.5];
+  const q = din === dout ? null : [cx + rv[0] * 3.5 + rw[0] * 3.5, cz + rv[1] * 3.5 + rw[1] * 3.5];
+  const len = q ? 15 : 2 * HW;
+  return { type: 'node', p0, p1, q, len, i, j };
+}
+function cityLineSeg(i, j, d) {
+  const [cx, cz] = cityNode(i, j), dv = CDIR[d], rv = cRV(d), HW = CITY_HW;
+  const p0 = [cx + dv[0] * HW + rv[0] * 3.5, cz + dv[1] * HW + rv[1] * 3.5];
+  const ni = i + dv[0], nj = j + dv[1], [nx, nz] = cityNode(ni, nj);
+  const p1 = [nx - dv[0] * HW + rv[0] * 3.5, nz - dv[1] * HW + rv[1] * 3.5];
+  return { type: 'line', p0, p1, q: null, len: CITY_PITCH - 2 * HW, ni, nj, d };
+}
+function cityOuts(i, j, din) {
+  const o = [];
+  for (let d = 0; d < 4; d++) { if (d === (din + 2) % 4) continue; const ni = i + CDIR[d][0], nj = j + CDIR[d][1]; if (ni >= 0 && ni < CITY_N && nj >= 0 && nj < CITY_N) o.push(d); }
+  return o.length ? o : [(din + 2) % 4];
+}
+function cityPlaceAi(a) {
+  const i = Math.floor(rnd(0, CITY_N)), j = Math.floor(rnd(0, CITY_N)), d = pick(cityOuts(i, j, Math.floor(rnd(0, 4))));
+  a.d = d; a.nextD = d; a.seg = citySeg(i, j, d, d); a.s = rnd(0, a.seg.len); a.pos = [0, 0]; a.yaw = 0; a.v = rnd(0, 6);
+  cityEval(a);
+}
+function cityEval(a) {
+  const s = a.seg, t = clamp(a.s / s.len, 0, 1);
+  let x, z, tx, tz;
+  if (s.q) {
+    const u = 1 - t; x = u * u * s.p0[0] + 2 * u * t * s.q[0] + t * t * s.p1[0]; z = u * u * s.p0[1] + 2 * u * t * s.q[1] + t * t * s.p1[1];
+    tx = 2 * u * (s.q[0] - s.p0[0]) + 2 * t * (s.p1[0] - s.q[0]); tz = 2 * u * (s.q[1] - s.p0[1]) + 2 * t * (s.p1[1] - s.q[1]);
+  } else { x = s.p0[0] + (s.p1[0] - s.p0[0]) * t; z = s.p0[1] + (s.p1[1] - s.p0[1]) * t; tx = s.p1[0] - s.p0[0]; tz = s.p1[1] - s.p0[1]; }
+  a.pos[0] = x; a.pos[1] = z; a.yaw = Math.atan2(tx, -tz);
+  a.mesh.position.set(x, 0, z); a.mesh.rotation.y = -a.yaw;
+}
+function cityLight(i, j, ax, t) {
+  const ph = (t + ((i + j) % 3) * 8) % 24, p = ax === 'ns' ? ph : (ph + 12) % 24;
+  return p < 9 ? 0 : p < 11 ? 1 : 2;                         // 0 зелёный, 1 жёлтый, 2 красный
+}
+function cityAiStep(dt, P) {
+  for (const a of city.ai) {
+    const s = a.seg;
+    let vt = a.vt;
+    if (a.hold > 0) { a.hold -= dt; vt = 0; }
+    if (s.type === 'line') {
+      const dEnd = s.len - a.s, ax = s.d % 2 === 0 ? 'ns' : 'ew', st = cityLight(s.ni, s.nj, ax, city.t);
+      if (st !== 0 && dEnd > 0.3 && !(st === 1 && dEnd < a.v * a.v / 9)) vt = Math.min(vt, Math.max(0, (dEnd - 2.5) * 1.1));
+    }
+    const hx = Math.sin(a.yaw), hz = -Math.cos(a.yaw), rx = -hz, rz = hx;
+    const chk = (ox, oz) => {
+      const dx = ox - a.pos[0], dz = oz - a.pos[1], f = dx * hx + dz * hz, l = Math.abs(dx * rx + dz * rz);
+      if (f > 0 && f < 8 + a.v * 0.9 && l < 2.3) vt = Math.min(vt, Math.max(0, (f - 5.2) * 1.2));
+    };
+    for (const b of city.ai) if (b !== a) chk(b.pos[0], b.pos[1]);
+    chk(P.x, P.z);
+    a.v += clamp(vt - a.v, -7 * dt, 2.6 * dt);
+    a.s += a.v * dt;
+    while (a.s >= s.len) {
+      a.s -= s.len;
+      if (a.seg.type === 'line') { a.seg = citySeg(a.seg.ni, a.seg.nj, a.seg.d, a.nextD = pick(cityOuts(a.seg.ni, a.seg.nj, a.seg.d))); }
+      else { const d = a.nextD; a.seg = cityLineSeg(a.seg.i, a.seg.j, d); a.d = d; }
+      break;
+    }
+    cityEval(a);
+  }
+}
+
+function cityUpdateView(dt) {
+  // светофоры
+  city.lightT -= dt;
+  if (city.lightT <= 0 && city.heads) {
+    city.lightT = 0.25;
+    const col = [new THREE.Color(0x2ee86a), new THREE.Color(0xffd24a), new THREE.Color(0xff3b30)];
+    city.headIdx.forEach(([i, j, ax], n) => city.heads.setColorAt(n, col[cityLight(i, j, ax, city.t)]));
+    city.heads.instanceColor.needsUpdate = true;
+  }
+  city.facadeMat.emissiveIntensity = hemi.intensity < 0.55 ? 1 : 0;
+  for (const p of city.peds) {
+    p.s += p.dir * p.sp * dt;
+    if (Math.abs(p.s) > 175) p.dir *= -1;
+    const off = (CITY_HW + 1.6) * p.side, line = p.axis === 0 ? cZ(p.line) : cX(p.line);
+    p.ph += dt * 7;
+    if (p.axis === 0) { p.g.position.set(p.s, Math.abs(Math.sin(p.ph)) * 0.04 + 0.16, line + off); p.g.rotation.y = p.dir > 0 ? -Math.PI / 2 : Math.PI / 2; }
+    else { p.g.position.set(line + off, Math.abs(Math.sin(p.ph)) * 0.04 + 0.16, p.s); p.g.rotation.y = p.dir > 0 ? Math.PI : 0; }
+  }
+}
+
+function showHighway(v) {
+  world.group.visible = v; grass.visible = v; stationG.visible = v; rampG.visible = v;
+  if (!v) { pumpHose.visible = false; walker.visible = false; }
+}
+function fadeFx() {
+  const f = $('fadeFx'); if (!f) return;
+  f.style.transition = 'none'; f.style.opacity = 1; void f.offsetWidth; f.style.transition = 'opacity .7s'; f.style.opacity = 0;
+}
+function enterCity(P) {
+  if (city.on) return;
+  if (Net.role !== 'solo') { if (city.blockMsg <= 0) { toast('🏙 Город доступен только в одиночной игре'); city.blockMsg = 4; } P.x = world.tot / 2 + 4; P.yaw = 0; return; }
+  if (!city.built) buildCity();
+  city.retZ = rampZ(P.z);
+  city.on = true; showHighway(false); city.group.visible = true; clearTraffic();
+  P.x = 3.5; P.z = 268; P.yaw = 0; city.camYaw = 0; city.sv = Math.min(P.v, 16); city.dir = 1; P.v = city.sv; gs.safe = 2; city.emptyT = 0;
+  hop.y = hop.vy = 0; el.btnCity.classList.remove('hidden'); fadeFx();
+  toast('🏙 Город · кнопка «Трасса» (T) вернёт на шоссе');
+}
+function exitCityRaw() {
+  if (!city.on) return;
+  city.on = false; city.group.visible = false; showHighway(true); el.btnCity.classList.add('hidden');
+}
+function returnToHighway(P) {
+  if (!city.on) return;
+  exitCityRaw();
+  P.x = laneX(game.lanes - 1); P.z = city.retZ - 90; P.yaw = 0; P.v = clamp(Math.max(P.v, 14), 14, Math.max(14, cfg.targetKmh / 3.6)); P.aLong = 0; P.aLat = 0; P.steer = 0;
+  gs.safe = 4; gs.mode = 'drive'; app.wasAhead.clear(); app.clientVeh.clear(); clearTraffic();
+  if (Net.role !== 'client') { sim.reset(); sim.populate(allPlayers()); }
+  camState.x = P.x; fadeFx(); toast('🛣 Обратно на трассе');
+}
+function rampCheck(P) {
+  if (city.blockMsg > 0) city.blockMsg -= 1 / 60;
+  if (app.demo || !P.alive) return;
+  const zr = rampZ(P.z), lx = P.x - world.tot / 2, lz = P.z - zr;
+  if (lx > 13.5 && lz > -66 && lz < 24) enterCity(P);
+}
+
+function cityStep(P, inp, dt) {
+  const c = city; c.t += dt;
+  if (!P.alive) {
+    P.crashT += dt; c.sv = Math.max(0, c.sv - 16 * dt); P.v = c.sv;
+    P.yaw += P.wreckSpin * dt * Math.min(1, c.sv / 5 + 0.1);
+    P.x += Math.sin(P.yaw) * c.sv * c.dir * dt; P.z -= Math.cos(P.yaw) * c.sv * c.dir * dt;
+    P.aLong = -8; P.aLat = 0; P.steer = 0; P.scrape = false;
+    cityAiStep(dt, P); return;
+  }
+  const empty = gs.fuel <= 0;
+  if (!admin.god) { const v = P.v; gs.fuel = Math.max(0, gs.fuel - (0.01 + 0.0015 * v + 0.00006 * v * v) / 60 * dt); }
+  if (gs.fuel < 0.15 && !gs.warned) { gs.warned = true; toast(fuelIc() + ' Мало топлива — заправка на площади слева от въезда'); }
+  if (gs.fuel > 0.3) gs.warned = false;
+  let thr = empty ? 0 : inp.throttle, brk = inp.brake, sv = c.sv;
+  const vs = Math.abs(sv) / SPEEDSCALE, res = (0.12 + 0.00045 * vs * vs) * Math.sign(sv || 1);
+  let a = 0;
+  if (thr > 0.02) a = sv < -0.2 ? 9 : accelMax(Math.abs(sv)) * thr;
+  else if (brk > 0.02) a = sv > 0.3 ? -(3 + 8 * brk) : -Math.min(3, 3 * brk) * (sv > -5 ? 1 : 0);
+  else a = Math.abs(sv) < 0.6 ? -sv * 4 : -Math.sign(sv) * 1.4;
+  if (Math.abs(sv) > 0.6 || Math.abs(a) > 0.3) a -= res;
+  const lim = Math.min(VMAX, 35);
+  sv = clamp(sv + a * dt, -5, lim); if (thr <= 0.02 && brk <= 0.02 && Math.abs(sv) < 0.15) sv = 0;
+  P.aLong = a;
+  c.sv = sv; P.v = Math.abs(sv);
+  const L = Math.max(2.2, PLAYER_DIM.len * 0.6), ang = inp.steer * 0.55 / Math.sqrt(1 + Math.pow(Math.abs(sv) / 14, 2));
+  let yr = sv * Math.tan(ang) / L; const yl = 9 / Math.max(Math.abs(sv), 4); yr = clamp(yr, -yl, yl);
+  P.yaw += yr * dt; P.yaw = Math.atan2(Math.sin(P.yaw), Math.cos(P.yaw));
+  P.steer = inp.steer; P.aLat = sv * yr; P.scrape = false;
+  P.x += Math.sin(P.yaw) * sv * dt; P.z -= Math.cos(P.yaw) * sv * dt;
+  P.x = clamp(P.x, -246, 246); P.z = clamp(P.z, -246, 299);
+  // столкновения со зданиями
+  const fx = Math.sin(P.yaw), fz = -Math.cos(P.yaw), r = PLAYER_DIM.wid / 2, d = Math.max(0, (PLAYER_DIM.len - PLAYER_DIM.wid) / 2);
+  const safe = P.god || gs.safe > 0; if (gs.safe > 0) gs.safe -= dt;
+  let worst = 0, hit = false;
+  for (const off of [-d, 0, d]) {
+    const cx = P.x + fx * off, cz = P.z + fz * off;
+    for (const b of c.boxes) {
+      if (cx < b.x0 - r || cx > b.x1 + r || cz < b.z0 - r || cz > b.z1 + r) continue;
+      const qx = clamp(cx, b.x0, b.x1), qz = clamp(cz, b.z0, b.z1);
+      let nx = cx - qx, nz = cz - qz, dist = Math.hypot(nx, nz), pen;
+      if (dist < 1e-4) { const m = [cx - b.x0, b.x1 - cx, cz - b.z0, b.z1 - cz], k = m.indexOf(Math.min(...m)); nx = k === 0 ? -1 : k === 1 ? 1 : 0; nz = k === 2 ? -1 : k === 3 ? 1 : 0; pen = Math.min(...m) + r; }
+      else { if (dist >= r) continue; nx /= dist; nz /= dist; pen = r - dist; }
+      P.x += nx * pen; P.z += nz * pen; hit = true;
+      worst = Math.max(worst, -(fx * nx + fz * nz) * sv);
+    }
+  }
+  // столкновения с ИИ-машинами
+  for (const o of c.ai) {
+    const ohx = Math.sin(o.yaw), ohz = -Math.cos(o.yaw);
+    for (const po of [-d, 0, d]) for (const oo of [-1, 1]) {
+      const px = P.x + fx * po, pz = P.z + fz * po, ox = o.pos[0] + ohx * oo, oz = o.pos[1] + ohz * oo;
+      const dx = px - ox, dz = pz - oz, dist = Math.hypot(dx, dz), rr = r + 0.95;
+      if (dist >= rr || dist < 1e-4) continue;
+      const nx = dx / dist, nz = dz / dist, pen = rr - dist;
+      P.x += nx * pen * 0.6; P.z += nz * pen * 0.6; hit = true; o.hold = 1.5;
+      const closing = (ohx * o.v - fx * sv) * nx + (ohz * o.v - fz * sv) * nz;
+      worst = Math.max(worst, closing);
+    }
+  }
+  if (hit) {
+    if (worst > CRASH_REL * 0.9 && !safe) crashPlayer(P, worst);
+    else { c.sv *= 0.6; P.scrape = worst > 2; }
+  }
+  // заправка в городе
+  const pd = c.pad;
+  gs.fueling = !!(pd && P.v < 0.8 && gs.fuel < 0.999 && P.x > pd.x0 && P.x < pd.x1 && P.z > pd.z0 && P.z < pd.z1);
+  pumpHose.visible = false;
+  if (gs.fueling) doFuel(P, dt);
+  // кончилось топливо — эвакуатор на шоссе
+  if (empty && P.v < 0.3) { c.emptyT += dt; if (c.emptyT > 3) { c.emptyT = 0; gs.fuel = 0.08; toast('🚚 Эвакуатор увёз на трассу'); returnToHighway(P); return; } } else c.emptyT = 0;
+  cityAiStep(dt, P);
+  if (P.z > 278) returnToHighway(P);
+}
+function cityCam(P, dt, V, k) {
+  let dd = P.yaw - city.camYaw; dd = Math.atan2(Math.sin(dd), Math.cos(dd)); city.camYaw += dd * Math.min(1, dt * 4);
+  const cy = city.camYaw, back = V.cam[1] * 0.85 + k * 1.2, h = V.cam[0] + 1.0 + k * 0.4;
+  camera.position.set(P.x - Math.sin(cy) * back, h, P.z + Math.cos(cy) * back);
+  camera.lookAt(P.x + Math.sin(cy) * 5, 0.9, P.z - Math.cos(cy) * 5);
 }
 
 // ---------- выбор транспорта ----------
@@ -3520,6 +3929,7 @@ const allPlayers = () => (app.P ? [app.P].concat(remotePlayers()) : []);
 const vehiclesNow = () => (Net.role === 'client' ? [...app.clientVeh.values()] : sim.vehicles);
 
 function startRun(o) {
+  if (city.on) exitCityRaw();
   applyTrack(o.track || cfg);
   const v0 = cfg.targetKmh / 3.6;
   app.demo = !!o.demo;
@@ -3534,6 +3944,7 @@ function startRun(o) {
   updateNetUI();
 }
 function respawn() {
+  if (city.on) exitCityRaw();
   const P = app.P, spot = findSpawnSpot(P, vehiclesNow().concat(remotePlayers()));
   const v0 = cfg.targetKmh / 3.6, N = newPlayer(spot.z, v0);
   N.x = spot.x; N.target = v0;
@@ -3689,7 +4100,7 @@ function step(dt) {
   P.target = cfg.targetKmh / 3.6;
   P.god = admin.god || gs.mode !== 'drive' || gs.safe > 0;
 
-  if (Net.role !== 'client') {
+  if (Net.role !== 'client' && !city.on) {
     const pls = allPlayers();
     manageTraffic(dt, pls);
     stepTraffic(dt, pls);
@@ -3697,11 +4108,10 @@ function step(dt) {
   extrapolate(dt);
 
   const wasAlive = P.alive;
-  if (!stationStep(P, inp, dt)) stepPlayer(P, inp, dt);
+  if (city.on) cityStep(P, inp, dt); else { if (!stationStep(P, inp, dt)) stepPlayer(P, inp, dt); rampCheck(P); }
   const list = vehiclesNow();
   if (!app.demo) {
-    collide(P, list);
-    countOvertakes(P, list);
+    if (!city.on) { collide(P, list); countOvertakes(P, list); }
     if (wasAlive && !P.alive) { Snd.burst(0.9, 900, 0.9); try { navigator.vibrate && navigator.vibrate([120, 60, 200]); } catch (e) {} el.flash.style.opacity = 1; setTimeout(() => { el.flash.style.opacity = 0; }, 350); }
     if (!P.alive && !app.crashShown && P.crashT > 1.3) { app.crashShown = true; showGameOver(); }
     if (vr.on && !P.alive && P.crashT > 3) respawn();
@@ -3718,11 +4128,12 @@ function step(dt) {
 
 function drawFrame(dt) {
   const P = app.P;
-  syncTraffic(vehiclesNow(), dt);
+  syncTraffic(city.on ? [] : vehiclesNow(), dt);
   syncRemotes(remotePlayers(), dt);
   updateWorld(P.z, dt);
   if (gs.mode === 'walk') walkView(P, dt, app.time); else updateView(P, dt, cfg.view, app.time);
   updateStationView(P, dt);
+  if (city.on) cityUpdateView(dt);
   updateVrHud(P, dt);
   updateWeather(P, dt, app.time);
   drawGauge(P.v * 3.6, cfg.targetKmh);
@@ -3732,7 +4143,7 @@ function drawFrame(dt) {
   if (app.hudAcc > 0.1) {
     app.hudAcc = 0;
     el.dockSpd.textContent = cfg.targetKmh;
-    if (app.demo) { el.scoreVal.textContent = ''; el.subVal.textContent = ''; }
+    if (app.demo || city.on) { el.scoreVal.textContent = ''; el.subVal.textContent = city.on ? '🏙 Город · «Трасса» (T) — вернуться на шоссе' : ''; }
     else {
       el.scoreVal.textContent = Math.floor((P.startZ - P.z) / 10) + P.overtakes * 25;
       el.subVal.textContent = Math.max(0, Math.round(P.startZ - P.z)) + ' м · обгонов ' + P.overtakes;
