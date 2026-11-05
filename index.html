@@ -163,6 +163,10 @@
   .actions { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
 
   /* ---------- мобильные кнопки ---------- */
+  #pedals { position: absolute; right: 16px; bottom: 104px; display: none; gap: 10px; align-items: flex-end; z-index: 6; }
+  #pedals button { pointer-events: all; width: 46px; height: 66px; border-radius: 12px; border: 1px solid rgba(255,255,255,.25); color: #fff; font-size: 11px; font-weight: 700; touch-action: none; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 6px; }
+  #pedGas { background: linear-gradient(#2f8f4e, #1f6b38); } #pedBrake { background: linear-gradient(#c0392b, #8e2a20); height: 56px; }
+  #pedals button:active { filter: brightness(1.35); }
   #touchCtrls {
     position: absolute; bottom: 18px; left: 0; right: 0; display: none;
     justify-content: space-between; align-items: flex-end; padding: 0 16px; pointer-events: none; z-index: 6;
@@ -173,8 +177,12 @@
   }
   #touchCtrls .mid { display: flex; flex-direction: column; gap: 8px; margin-bottom: 120px; }
   #touchCtrls .mid button { width: 52px; height: 52px; font-size: 22px; }
+  body.mobOn #touchCtrls, body.mobOn #pedals { display: flex !important; }
+  body.mobOn #bottomRight, body.mobOff #touchCtrls, body.mobOff #pedals { display: none !important; }
+  body.mobOff #bottomRight { display: flex !important; }
   @media (max-width: 820px), (pointer: coarse) {
     #touchCtrls { display: flex; }
+    #pedals { display: flex; }
     #bottomRight { display: none; }
   }
   .swatches { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
@@ -232,6 +240,8 @@
     <button id="btnLeft" aria-label="Влево"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4l-8 8 8 8"/></svg></button>
     <button id="btnRight" aria-label="Вправо"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4l8 8-8 8"/></svg></button>
   </div>
+
+  <div id="pedals"><button id="pedBrake" aria-label="Тормоз">ТОРМ</button><button id="pedGas" aria-label="Газ">ГАЗ</button></div>
 
   <div class="dock" id="dockL">
     <button class="dbtn" id="menuToggle" title="Меню (Esc)">
@@ -343,7 +353,10 @@
       <div class="seg sm" id="wxSeg"></div>
       <div class="row"><span>Сложность</span></div>
       <div class="seg" id="diffSeg"></div>
+      <div class="row" style="margin-top:10px"><span>Графика</span></div>
+      <div class="seg sm" id="gfxSeg"></div>
       <div class="row" style="margin-top:10px"><span>Звук</span><button class="btn" id="soundBtn"></button></div>
+      <div class="row"><span>Мобильное управление</span><button class="btn" id="mobBtn"></button></div>
       <div class="row"><span>VR-шлем</span><button class="btn" id="vrBtn" disabled>VR недоступен</button></div>
       <div class="hint" id="vrHint">VR: стик — руль и скорость, курок — газ, хват — тормоз.</div>
       <div class="row"><span>Скриншот</span><button class="btn" id="photoBtn">📷 Сохранить</button></div>
@@ -906,6 +919,14 @@ const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.1, 80
 camera.rotation.order = 'YXZ';
 scene.add(camera);
 
+const GFX_LEVELS = [
+  { name: 'Ультра',   pr: 2,    fog: 1,    view: 900, mirror: true,  stars: true,  fx: 1,    hi: true },
+  { name: 'Высокая',  pr: 1.5,  fog: 1,    view: 650, mirror: true,  stars: true,  fx: 1,    hi: true },
+  { name: 'Средняя',  pr: 1,    fog: 0.8,  view: 450, mirror: true,  stars: true,  fx: 0.6,  hi: false },
+  { name: 'Низкая',   pr: 0.75, fog: 0.6,  view: 300, mirror: false, stars: false, fx: 0.3,  hi: false },
+  { name: 'Картошка', pr: 0.5,  fog: 0.4,  view: 180, mirror: false, stars: false, fx: 0.1,  hi: false },
+];
+let GFX = GFX_LEVELS[0];
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.setSize(innerWidth, innerHeight);
@@ -1423,6 +1444,8 @@ const SCO = {
   kukg3p: { r: 0.145, w: 0.11, wb: 1.14, acc: 0xffc22f, dual: false },
   kukg4:  { r: 0.15, w: 0.12, wb: 1.2, acc: 0xe84545, dual: true },
   kukg4m: { r: 0.165, w: 0.14, wb: 1.28, acc: 0xb47cff, dual: true },
+  kukdtstorm: { r: 0.165, w: 0.14, wb: 1.3, acc: 0x00d1ff, dual: true, bar: 0.7 },
+  kukdtthunder: { r: 0.17, w: 0.15, wb: 1.38, acc: 0xffc400, dual: true, bar: 0.76 },
 };
 const scoGeoCache = {};
 function scoGeo(P) {
@@ -1446,10 +1469,12 @@ function makeScooterMesh(color, opts) {
   add(fork, box(0.1, 0.02, 0.36), paint, 0, r * 2 + 0.05, -0.02);                   // переднее крыло
   barIn(fork, [0, r, 0], [0, 1.1, 0.14], 0.05, M.black);                           // рулевая стойка
   barIn(fork, [0.07, r, 0], [0.07, 0.6, 0.06], 0.02, M.chrome);                    // амортизатор
-  add(fork, box(0.62, 0.03, 0.03), M.black, 0, 1.1, 0.14);                         // руль
+  const bw = P.bar || 0.62;
+  add(fork, box(bw, 0.03, 0.03), M.black, 0, 1.1, 0.14);                           // руль
   for (const sx of [-1, 1]) {
-    add(fork, box(0.11, 0.04, 0.04), glove, sx * 0.31, 1.1, 0.14);
-    add(fork, box(0.07, 0.015, 0.1), M.chrome, sx * 0.27, 1.12, 0.07);             // рычаги тормоза
+    add(fork, box(0.11, 0.04, 0.04), glove, sx * (bw / 2), 1.1, 0.14);
+    add(fork, box(0.07, 0.015, 0.1), M.chrome, sx * (bw / 2 - 0.04), 1.12, 0.07);
+    if (P.bar) { barIn(fork, [sx * 0.09, r, 0], [sx * 0.09, 0.62, 0.05], 0.03, acc); add(fork, box(0.05, 0.05, 0.14), M.chrome, sx * (bw / 2 - 0.08), 1.16, 0.12); }   // пружины-амортизаторы и зеркала/фонари             // рычаги тормоза
   }
   add(fork, box(0.13, 0.07, 0.03), M.black, 0, 1.15, 0.12);                        // дисплей
   add(fork, box(0.1, 0.04, 0.015), acc, 0, 1.15, 0.103);
@@ -1607,7 +1632,7 @@ const mirrorCam = new THREE.PerspectiveCamera(40, 4, 0.2, 900);
 const mirrorEye = new THREE.Vector3();
 let mirrorOn = false, mirrorYaw = 0, mirrorTick = 0;
 function renderMirror() {
-  if (!mirrorOn || !renderer.setRenderTarget) return;
+  if (!mirrorOn || !GFX.mirror || !renderer.setRenderTarget) return;
   mirrorTick++;
   if (mirrorTick % 2) return;
   mirrorCam.position.copy(mirrorEye);
@@ -1728,7 +1753,7 @@ addCar('golf2', 'VW Golf GTI MK2', 'Golf GTI', 'hatch', '#d23a2e', [4.0, 1.7, 95
   { head: 'rect', hw: [0.4, 0.2], hx: 0.55, hy: 0.68, tail: 'box', ty: 0.84, grille: 'black' }, 'hatch', { seat: 0x4b4e5a, trim: 0x33353d });
 
 [['kukg2p', 'Kukirin G2 Pro', 'G2 Pro', 0.5, 55, 1.0], ['kukg2m', 'Kukirin G2 Max', 'G2 Max', 0.55, 60, 1.05], ['kukg3', 'Kukirin G3', 'G3', 0.6, 65, 1.1],
- ['kukg3p', 'Kukirin G3 Pro', 'G3 Pro', 0.7, 70, 1.14], ['kukg4', 'Kukirin G4', 'G4', 0.85, 80, 1.2], ['kukg4m', 'Kukirin G4 Max', 'G4 Max', 1.0, 90, 1.28]].forEach(([id, name, short, acc, vmax, wb]) =>
+ ['kukg3p', 'Kukirin G3 Pro', 'G3 Pro', 0.7, 70, 1.14], ['kukg4', 'Kukirin G4', 'G4', 0.85, 80, 1.2], ['kukg4m', 'Kukirin G4 Max', 'G4 Max', 1.0, 90, 1.28], ['kukdtstorm', 'Dualtron Storm', 'Storm', 1.15, 100, 1.3], ['kukdtthunder', 'Dualtron Thunder', 'Thunder', 1.3, 110, 1.38]].forEach(([id, name, short, acc, vmax, wb]) =>
   VEH.push({ id, name, short, kind: 'scooter', ic: '#ffb02e', len: wb + 0.45, wid: 0.62, mass: 110, accel: acc, vmax, eye: [0, 1.66, -wb / 2 + 0.36], cam: [2.3, 5.8], pitch: -0.6, electric: true }));
 function buildSedanCabin(V, color) {
   const S = CAB_STYLE[V.id], g = cabBody, A = (geo, mat, x, y, z) => add(g, geo, mat, x, y, z);
@@ -2239,7 +2264,7 @@ let sunY = 90;
 function setTimeOfDay(k) {
   const t = TOD[k] || TOD.day;
   scene.background.set(t.sky);
-  scene.fog.color.set(t.sky); scene.fog.near = t.fog[0]; scene.fog.far = t.fog[1];
+  scene.fog.color.set(t.sky); scene.fog.near = t.fog[0] * GFX.fog; scene.fog.far = t.fog[1] * GFX.fog;
   skyUni.top.value.set(t.skyTop); skyUni.bottom.value.set(t.sky);
   hemi.color.set(t.hemi[0]); hemi.groundColor.set(t.hemi[1]); hemi.intensity = t.hemi[2];
   sunLight.color.set(t.sun[0]); sunLight.intensity = t.sun[1];
@@ -2250,7 +2275,7 @@ function setTimeOfDay(k) {
   grass.material.color.set(t.grass);
   hillMat.color.set(t.hill);
   cloudMat.color.set(t.cloud[0]); cloudMat.opacity = t.cloud[1];
-  stars.visible = t.stars;
+  stars.visible = t.stars && GFX.stars;
   setLampsOn(t.lamps);
   setNightGlow(t.lights);
   return t.lights;      // нужны ли фары по умолчанию
@@ -2328,7 +2353,7 @@ const app = {
 
 // ---------- ввод ----------
 const keys = {};
-const touch = { left: false, right: false };
+const touch = { left: false, right: false, gas: false, brake: false };
 let steerKey = 0;
 addEventListener('keydown', e => {
   const tag = e.target && e.target.tagName;
@@ -2344,7 +2369,7 @@ addEventListener('keydown', e => {
   }
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
-addEventListener('blur', () => { for (const k in keys) keys[k] = false; touch.left = touch.right = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; touch.left = touch.right = touch.gas = touch.brake = false; });
 
 const bindHold = (b, on, off) => {
   b.addEventListener('touchstart', e => { e.preventDefault(); on(); }, { passive: false });
@@ -2355,6 +2380,8 @@ const bindHold = (b, on, off) => {
 };
 bindHold(el.btnLeft, () => { touch.left = true; }, () => { touch.left = false; });
 bindHold(el.btnRight, () => { touch.right = true; }, () => { touch.right = false; });
+bindHold($('pedGas'), () => { touch.gas = true; }, () => { touch.gas = false; });
+bindHold($('pedBrake'), () => { touch.brake = true; }, () => { touch.brake = false; });
 el.btnSpdUp.addEventListener('click', () => adjustSpeed(10));
 el.btnSpdDn.addEventListener('click', () => adjustSpeed(-10));
 
@@ -2465,8 +2492,8 @@ function readInput(dt) {
   if (keys.ArrowRight || keys.KeyD || touch.right) key += 1;
   steerKey += clamp(key - steerKey, -(key === 0 ? 6 : 3.2) * dt, (key === 0 ? 6 : 3.2) * dt);   // плавный набор руля для кнопок
   let steer = steerKey;
-  let throttle = keys.ArrowUp || keys.KeyW ? 1 : 0;
-  let brake = keys.ArrowDown || keys.KeyS ? 1 : 0;
+  let throttle = keys.ArrowUp || keys.KeyW || touch.gas ? 1 : 0;
+  let brake = keys.ArrowDown || keys.KeyS || touch.brake ? 1 : 0;
 
   let pad = null;
   if (padIndex !== null && !padBlocked) {
@@ -2713,6 +2740,9 @@ function initEnv() {
   el.wxSeg.innerHTML = WX_KEYS.map(k => '<button data-k="' + k + '">' + WX[k].name + '</button>').join('');
   applyTod(cfg.tod);
   showWx();
+  $('gfxSeg').innerHTML = GFX_LEVELS.map((g, i) => '<button data-i="' + i + '">' + g.name + '</button>').join('');
+  if (cfg.gfx === undefined) cfg.gfx = (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) ? 2 : 0;
+  applyGfx();
   showColor(); showDiff(); showSound();
   buildTuneUI();
   PLAYER_COLOR = cfg.paint;
@@ -2721,12 +2751,24 @@ function initEnv() {
   setDifficulty(cfg.diff);
 }
 function showColor() { [...el.colorRow.children].forEach(b => b.classList.toggle('on', PAINTS[+b.dataset.i] === cfg.paint)); el.paintInput.value = '#' + cfg.paint.toString(16).padStart(6, '0'); }
+function applyGfx() {
+  const g = GFX_LEVELS[cfg.gfx] || GFX_LEVELS[0]; GFX = g;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, g.pr));
+  renderer.setSize(innerWidth, innerHeight);
+  if (typeof applyTod === 'function' && cfg.tod) applyTod(cfg.tod);
+  [...$('gfxSeg').children].forEach(b => b.classList.toggle('on', +b.dataset.i === cfg.gfx));
+}
 function showDiff() { [...el.diffSeg.children].forEach(b => b.classList.toggle('on', +b.dataset.i === cfg.diff)); }
 function showSound() { el.soundBtn.textContent = cfg.sound ? '🔊 Вкл' : '🔇 Выкл'; }
 el.todSeg.addEventListener('click', e => { const b = e.target.closest('button'); if (b) applyTod(b.dataset.v); });
 el.btnTod.addEventListener('click', () => { applyTod(cfg.tod === 'night' ? 'day' : 'night'); el.btnTod.blur(); });
 el.colorRow.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; cfg.paint = PAINTS[+b.dataset.i]; setPlayerColor(cfg.paint); showColor(); saveCfg(); });
+$('gfxSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; cfg.gfx = +b.dataset.i; applyGfx(); saveCfg(); });
 el.diffSeg.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; cfg.diff = +b.dataset.i; setDifficulty(cfg.diff); showDiff(); saveCfg(); });
+function mobVisible() { return getComputedStyle($('touchCtrls')).display !== 'none'; }
+function showMob() { document.body.classList.toggle('mobOn', cfg.mob === 'on'); document.body.classList.toggle('mobOff', cfg.mob === 'off'); $('mobBtn').textContent = mobVisible() ? '📱 Показаны' : '📱 Скрыты'; }
+$('mobBtn').addEventListener('click', () => { cfg.mob = mobVisible() ? 'off' : 'on'; showMob(); saveCfg(); });
+showMob();
 el.soundBtn.addEventListener('click', () => { cfg.sound = !cfg.sound; showSound(); saveCfg(); if (cfg.sound) Snd.init(); });
 el.photoBtn.addEventListener('click', () => { toast(takePhoto() ? 'Скриншот сохранён' : 'Не удалось сделать скриншот'); });
 
@@ -2768,12 +2810,21 @@ const Snd = {
     if (c.state === 'suspended') c.resume().catch(() => {});
     const now = c.currentTime, v = P.v * 3.6;
     const gear = Math.min(5, Math.floor(v / 28)), lo = gear * 28, frac = clamp((v - lo) / 28, 0, 1);
-    const load = clamp(P.aLong / 4, 0, 1);
-    const f = 32 + frac * 62 + gear * 4;
-    this.eng.frequency.setTargetAtTime(f, now, 0.05);
-    this.eng2.frequency.setTargetAtTime(f * 0.5, now, 0.05);
-    this.engF.frequency.setTargetAtTime(260 + frac * 380 + load * 500, now, 0.08);
-    this.engG.gain.setTargetAtTime(P.alive ? 0.22 + load * 0.18 : 0, now, 0.1);
+    const load = clamp(P.aLong / 4, 0, 1), ele = !!VEH[VEH_I].electric;
+    if (ele !== this.ele) { this.ele = ele; this.eng.type = ele ? 'sine' : 'sawtooth'; this.eng2.type = ele ? 'triangle' : 'square'; }
+    if (ele) {                                              // электромотор: ровный вой, растёт с скоростью, без передач
+      const f = 190 + v * 12 + load * 50;
+      this.eng.frequency.setTargetAtTime(f, now, 0.06);
+      this.eng2.frequency.setTargetAtTime(f * 2.02, now, 0.06);
+      this.engF.frequency.setTargetAtTime(1500 + v * 30, now, 0.1);
+      this.engG.gain.setTargetAtTime(P.alive ? clamp(v / 6, 0, 1) * (0.05 + clamp(v / 90, 0, 1) * 0.07 + load * 0.04) : 0, now, 0.08);
+    } else {
+      const f = 32 + frac * 62 + gear * 4;
+      this.eng.frequency.setTargetAtTime(f, now, 0.05);
+      this.eng2.frequency.setTargetAtTime(f * 0.5, now, 0.05);
+      this.engF.frequency.setTargetAtTime(260 + frac * 380 + load * 500, now, 0.08);
+      this.engG.gain.setTargetAtTime(P.alive ? 0.22 + load * 0.18 : 0, now, 0.1);
+    }
     this.windG.gain.setTargetAtTime(clamp(v / 220, 0, 1) * 0.35, now, 0.2);
     this.windF.frequency.setTargetAtTime(300 + v * 6, now, 0.2);
     const rw = WX[cfg.weather];
@@ -2912,6 +2963,7 @@ function wxApply() {
   if (world.road) { const m = world.road.material; m.color.set(ROAD_TINT); m.shininess = ROAD_WET ? 55 : 4; m.specular.set(ROAD_WET ? 0x667788 : 0x000000); }
   wxBase.hemi = hemi.intensity; wxBase.top.copy(skyUni.top.value); wxBase.bottom.copy(skyUni.bottom.value); wxBase.fog.copy(scene.fog.color);
   rain.visible = !!w.rain; snow.visible = !!w.snow;
+  rainGeo.setDrawRange(0, Math.max(2, Math.floor(RAIN_N * GFX.fx) * 2)); snowGeo.setDrawRange(0, Math.max(1, Math.floor(SNOW_N * GFX.fx)));
   rain.material.opacity = w.storm ? 0.65 : 0.5;
 }
 
@@ -3423,12 +3475,12 @@ function updateVrHud(P, dt) {
 }
 
 // ---------- ГОРОД: съезд с трассы через ~60 м, свой район с трафиком, светофорами и пешеходами ----------
-const RAMP_S = 6000, CITY_HW = 7, CITY_PITCH = 60, CITY_N = 7;
+const RAMP_S = 6000, CITY_HW = 7, CITY_PITCH = 60, CITY_N = 61, CITY_CC = 30, CITY_MAX = 60;
 const rampZ = pz => -75 - Math.max(0, Math.round((-75 - pz) / RAMP_S)) * RAMP_S;
-const cX = i => (i - 3) * CITY_PITCH, cZ = j => (j - 3) * CITY_PITCH;
+const cX = i => (i - CITY_CC) * CITY_PITCH, cZ = j => (j - CITY_CC) * CITY_PITCH;
 const CDIR = [[0, -1], [1, 0], [0, 1], [-1, 0]];                    // N, E, S, W
 const cRV = d => [-CDIR[d][1], CDIR[d][0]];                          // вектор «вправо» от направления движения
-const city = { on: false, built: false, group: null, boxes: [], ai: [], peds: [], heads: null, lightT: 0, t: 0, camYaw: 0, sv: 0, dir: 1, retZ: -75, emptyT: 0, blockMsg: 0, pad: null, mats: [] };
+const city = { on: false, built: false, group: null, boxes: [], ai: [], peds: [], heads: null, lightT: 0, t: 0, camYaw: 0, sv: 0, dir: 1, retZ: -75, emptyT: 0, blockMsg: 0, pads: [], gasBlocks: [], mats: [] };
 const rampG = new THREE.Group();
 scene.add(rampG);
 (function buildRamp() {
@@ -3446,8 +3498,10 @@ scene.add(rampG);
 })();
 
 // --- сборщик статической геометрии (один меш вместо сотен) ---
-function MB() { return { p: [], n: [], u: [], c: [], i: [] }; }
-function mbBox(b, cx, cy, cz, w, h, d, col, tex) {
+function MB() { return { ch: new Map() }; }
+function mbBox(B, cx, cy, cz, w, h, d, col, tex) {
+  const key = (w > 200 || d > 200) ? 'big' : Math.floor(cx / 200) + ',' + Math.floor(cz / 200);
+  let b = B.ch.get(key); if (!b) { b = { p: [], n: [], u: [], c: [], i: [] }; B.ch.set(key, b); }
   const x0 = cx - w / 2, x1 = cx + w / 2, y0 = cy - h / 2, y1 = cy + h / 2, z0 = cz - d / 2, z1 = cz + d / 2;
   const r = ((col >> 16) & 255) / 255, g = ((col >> 8) & 255) / 255, bl = (col & 255) / 255;
   const ou = tex ? Math.random() : 0, ov = tex ? Math.random() : 0;
@@ -3468,14 +3522,19 @@ function mbBox(b, cx, cy, cz, w, h, d, col, tex) {
     b.i.push(base, base + 1, base + 2, base, base + 2, base + 3);
   }
 }
-function mbMesh(b, mat) {
+function mbMesh(B, mat) {
+  const grp = new THREE.Group(); grp.userData.chunks = true;
+  for (const b of B.ch.values()) grp.add(mbMeshOne(b, mat));
+  return grp;
+}
+function mbMeshOne(b, mat) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(b.p), 3));
   g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(b.n), 3));
   g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(b.u), 2));
   g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(b.c), 3));
   g.setIndex(new THREE.BufferAttribute(new Uint32Array(b.i), 1));
-  const m = new THREE.Mesh(g, mat); m.frustumCulled = false; return m;
+  g.computeBoundingSphere(); const m = new THREE.Mesh(g, mat); return m;
 }
 function facadeTex(lit) {
   return stCanvas(256, 256, (g, w, h) => {
@@ -3498,12 +3557,14 @@ function buildCity() {
   const flatMat = new THREE.MeshLambertMaterial({ vertexColors: true });
   const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true });
   // земля
-  mbBox(flat, 0, -0.3, 30, 900, 0.5, 900, 0x73777c);
+  mbBox(flat, 0, -0.3, 100, 4400, 0.5, 4400, 0x73777c);
   const PAL = [0xc9ccd4, 0xb7a89a, 0xd6cfc0, 0x9aa7b8, 0xb8c4c0, 0xcfa58f, 0x8d95a3];
-  const gasBlock = (bi, bj) => bi === 2 && bj === 5;
+  const GAS = [[CITY_CC - 1, CITY_MAX - 1], [CITY_CC + 3, 3], [CITY_CC - 4, CITY_CC + 2], [CITY_CC + 5, CITY_CC + 6], [CITY_CC - 5, 2], [CITY_CC + 8, 6], [CITY_CC - 8, CITY_CC + 7]];
+  for (let k = 0; k < 40; k++) GAS.push([3 + ((k * 17 + 5) % (CITY_MAX - 6)), 2 + ((k * 29 + 11) % (CITY_MAX - 6))]);
+  const gasBlock = (bi, bj) => GAS.some(g => g[0] === bi && g[1] === bj);
   // кварталы (включая внешнее кольцо и ряд у въезда)
-  for (let bi = -1; bi <= 6; bi++) for (let bj = -1; bj <= 6; bj++) {
-    const x0 = cX(bi) + HW, x1 = cX(bi + 1) - HW, z0 = cZ(bj) + HW, z1 = bj === 6 ? 293 : cZ(bj + 1) - HW;
+  for (let bi = -1; bi <= CITY_MAX; bi++) for (let bj = -1; bj <= CITY_MAX; bj++) {
+    const x0 = cX(bi) + HW, x1 = cX(bi + 1) - HW, z0 = cZ(bj) + HW, z1 = bj === CITY_MAX ? cZ(CITY_MAX) + 113 : cZ(bj + 1) - HW;
     const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2, w = x1 - x0, d = z1 - z0;
     const gas = gasBlock(bi, bj);
     mbBox(flat, mx, 0.07, mz, w, 0.16, d, gas ? 0x3d4046 : 0x9a9da3);          // тротуар / площадка
@@ -3511,12 +3572,12 @@ function buildCity() {
     for (const [lx, lz] of [[x0 + 1, mz], [x1 - 1, mz], [mx, z0 + 1], [mx, z1 - 1]]) {
       mbBox(flat, lx, 3.2, lz, 0.18, 6.2, 0.18, 0x55595f); mbBox(glow, lx, 6.3, lz, 0.5, 0.2, 0.5, 0xfff0c0);
     }
-    if (gas) { city.gasBlock = { x0, x1, z0, z1, mx, mz }; continue; }
+    if (gas) { city.gasBlocks.push({ x0, x1, z0, z1, mx, mz }); continue; }
     // участки 2x2
     const lw = (w - 6 - 2) / 2, ld = (d - 6 - 2) / 2;
     for (let a = 0; a < 2; a++) for (let c = 0; c < 2; c++) {
       const cx = x0 + 3 + lw / 2 + a * (lw + 2), cz = z0 + 3 + ld / 2 + c * (ld + 2), r = R();
-      const dist = Math.hypot(cx, cz) / 260;
+      const dist = Math.hypot(cx, cz) / 1400;
       if (r < 0.14) {                                                        // сквер с деревьями
         mbBox(flat, cx, 0.2, cz, lw, 0.1, ld, 0x4f9a46);
         for (let k = 0; k < 4; k++) {
@@ -3534,22 +3595,22 @@ function buildCity() {
   }
   // дороги
   const asph = 0x3a3d43, line = 0xe8e8e0;
-  for (let j = 0; j < CITY_N; j++) mbBox(flat, 0, 0.03, cZ(j), 360 + 2 * HW, 0.04, 2 * HW, asph);
+  for (let j = 0; j < CITY_N; j++) mbBox(flat, 0, 0.03, cZ(j), CITY_MAX * CITY_PITCH + 2 * HW, 0.04, 2 * HW, asph);
   for (let i = 0; i < CITY_N; i++) {
-    const z1 = i === 3 ? 300 : cZ(6) + HW;
+    const z1 = i === CITY_CC ? cZ(CITY_MAX) + 120 : cZ(CITY_MAX) + HW;
     mbBox(flat, cX(i), 0.031, (cZ(0) - HW + z1) / 2, 2 * HW, 0.04, z1 - cZ(0) + HW, asph);
   }
   // разметка и зебры
   const dash = (x, z, alongX) => mbBox(flat, x, 0.06, z, alongX ? 3 : 0.18, 0.02, alongX ? 0.18 : 3, line);
-  for (let j = 0; j < CITY_N; j++) for (let s = cX(0); s < cX(6); s += CITY_PITCH) for (let k = HW + 4; k < CITY_PITCH - HW - 2; k += 8) dash(s + k, cZ(j), true);
-  for (let i = 0; i < CITY_N; i++) for (let s = cZ(0); s < cZ(6); s += CITY_PITCH) for (let k = HW + 4; k < CITY_PITCH - HW - 2; k += 8) dash(cX(i), s + k, false);
-  for (let z = cZ(6) + HW + 4; z < 296; z += 8) dash(cX(3), z, false);
+  for (let j = 0; j < CITY_N; j++) for (let s = cX(0); s < cX(CITY_MAX); s += CITY_PITCH) for (let k = HW + 4; k < CITY_PITCH - HW - 2; k += 8) dash(s + k, cZ(j), true);
+  for (let i = 0; i < CITY_N; i++) for (let s = cZ(0); s < cZ(CITY_MAX); s += CITY_PITCH) for (let k = HW + 4; k < CITY_PITCH - HW - 2; k += 8) dash(cX(i), s + k, false);
+  for (let z = cZ(CITY_MAX) + HW + 4; z < cZ(CITY_MAX) + 116; z += 8) dash(cX(CITY_CC), z, false);
   for (let i = 0; i < CITY_N; i++) for (let j = 0; j < CITY_N; j++) {
     const cx = cX(i), cz = cZ(j);
     for (let d = 0; d < 4; d++) {
       const [dx, dz] = CDIR[d], ni = i + dx, nj = j + dz;
-      if (!((ni >= 0 && ni < CITY_N && nj >= 0 && nj < CITY_N) || (i === 3 && j === 6 && d === 2))) continue;
-      for (let s = -HW + 1; s <= HW - 1; s += 1.7) {
+      if (!((ni >= 0 && ni < CITY_N && nj >= 0 && nj < CITY_N) || (i === CITY_CC && j === CITY_MAX && d === 2))) continue;
+      for (let s = -HW + 1; s <= HW - 1; s += 2.0) {
         if (dx === 0) mbBox(flat, cx + s, 0.06, cz + dz * (HW + 2.2), 0.7, 0.02, 3, line);
         else mbBox(flat, cx + dx * (HW + 2.2), 0.06, cz + s, 3, 0.02, 0.7, line);
       }
@@ -3558,8 +3619,7 @@ function buildCity() {
     for (const [sx, sz] of [[1, 1], [-1, -1], [1, -1], [-1, 1]]) mbBox(flat, cx + sx * (HW + 1.2), 2.6, cz + sz * (HW + 1.2), 0.2, 5.2, 0.2, 0x3a3d43);
   }
   // АЗС в городе
-  const gb = city.gasBlock;
-  if (gb) {
+  for (const gb of city.gasBlocks) {
     const cx = gb.mx, cz = gb.mz;
     mbBox(flat, cx, 5.4, cz, 16, 0.5, 12, 0xd8352f); mbBox(glow, cx, 5.1, cz, 15.4, 0.1, 11.4, 0xfff1cf);
     for (const [px, pz] of [[-7, -5], [7, -5], [-7, 5], [7, 5]]) mbBox(flat, cx + px, 2.6, cz + pz, 0.5, 5.2, 0.5, 0xe8e8ea);
@@ -3568,14 +3628,14 @@ function buildCity() {
     mbBox(flat, gb.x0 + 5, 2, gb.z1 - 5.5, 8, 4, 8, 0xdadde3); mbBox(flat, gb.x0 + 5, 4.2, gb.z1 - 5.5, 8.6, 0.4, 8.6, 0x8a2b2b);
     mbBox(flat, gb.x1 - 1.5, 4.5, gb.z0 + 3, 0.5, 9, 0.5, 0x777b84);
     city.boxes.push({ x0: cx - 5.7, x1: cx + 5.7, z0: cz - 0.8, z1: cz + 0.8 }, { x0: gb.x0 + 1, x1: gb.x0 + 9, z0: gb.z1 - 9.5, z1: gb.z1 - 1.5 });
-    city.pad = { x0: cx - 8, x1: cx + 8, z0: cz - 5.5, z1: cz + 5.5 };
+    city.pads.push({ x0: cx - 8, x1: cx + 8, z0: cz - 5.5, z1: cz + 5.5 });
     const sg = stPlane(G, stBoard('АЗС', '95 · 98 · ДТ', '#d8352f'), 4, 2, gb.x1 - 1.5, 8.6, gb.z0 + 3.3, 0); sg.material.side = THREE.DoubleSide;
   }
   G.add(mbMesh(flat, flatMat)); G.add(mbMesh(bld, city.facadeMat)); G.add(mbMesh(glow, glowMat));
   // ворота возврата
-  const gate = stPlane(G, stBoard('ТРАССА', '↓', '#1b5fb5'), 6, 3, 0, 7, 292, Math.PI); gate.material.side = THREE.DoubleSide;
+  const gate = stPlane(G, stBoard('ТРАССА', '↓', '#1b5fb5'), 6, 3, 0, 7, cZ(CITY_MAX) + 112, Math.PI); gate.material.side = THREE.DoubleSide;
   // светофоры (головки)
-  const hg = new THREE.SphereGeometry(0.34, 8, 6), hm = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const hg = new THREE.OctahedronGeometry(0.4, 0), hm = new THREE.MeshBasicMaterial({ color: 0xffffff });
   const heads = new THREE.InstancedMesh(hg, hm, CITY_N * CITY_N * 4); heads.frustumCulled = false;
   const mt = new THREE.Matrix4(); let n = 0; city.headIdx = [];
   for (let i = 0; i < CITY_N; i++) for (let j = 0; j < CITY_N; j++) {
@@ -3586,7 +3646,7 @@ function buildCity() {
   }
   G.add(heads); city.heads = heads;
   // ИИ-машины
-  for (let k = 0; k < 22; k++) {
+  for (let k = 0; k < 160; k++) {
     const mesh = makeCarMesh(pick(CAR_COLORS), { lite: true, model: pick(CAR_MODELS) }); G.add(mesh);
     const a = { mesh, v: 0, vt: rnd(8, 12), hold: 0 };
     cityPlaceAi(a); city.ai.push(a);
@@ -3594,14 +3654,14 @@ function buildCity() {
   // пешеходы
   const pg = [new THREE.BoxGeometry(0.34, 0.8, 0.2), new THREE.BoxGeometry(0.44, 0.6, 0.24), new THREE.SphereGeometry(0.13, 8, 6)];
   const pc = [0xc0392b, 0x2b5fb8, 0x2e8b57, 0xe0b030, 0x7a4fb5, 0x333333, 0xe9e9e9];
-  for (let k = 0; k < 30; k++) {
+  for (let k = 0; k < 220; k++) {
     const g = new THREE.Group(), cl = pick(pc);
     const legs = new THREE.Mesh(pg[0], stMat(0x2a2f45)); legs.position.y = 0.4;
     const tor = new THREE.Mesh(pg[1], stMat(cl)); tor.position.y = 1.1;
     const hd = new THREE.Mesh(pg[2], stMat(0xe0b48c)); hd.position.y = 1.55;
     g.add(legs, tor, hd); G.add(g);
     const axis = Math.random() < 0.5 ? 0 : 1, line = Math.floor(Math.random() * CITY_N), side = Math.random() < 0.5 ? -1 : 1;
-    city.peds.push({ g, axis, line, side, s: rnd(-170, 170), dir: Math.random() < 0.5 ? 1 : -1, sp: rnd(1.1, 1.7), ph: rnd(0, 6) });
+    city.peds.push({ g, axis, line, side, s: rnd(-(CITY_MAX * 30 - 10), CITY_MAX * 30 - 10), dir: Math.random() < 0.5 ? 1 : -1, sp: rnd(1.1, 1.7), ph: rnd(0, 6) });
   }
   city.built = true;
 }
@@ -3646,7 +3706,18 @@ function cityLight(i, j, ax, t) {
   const ph = (t + ((i + j) % 3) * 8) % 24, p = ax === 'ns' ? ph : (ph + 12) % 24;
   return p < 9 ? 0 : p < 11 ? 1 : 2;                         // 0 зелёный, 1 жёлтый, 2 красный
 }
+function cityGfxCull(P) {
+  const far = scene.fog.far + 40;
+  for (const grp of city.group.children) if (grp.userData.chunks) for (const m of grp.children) {
+    const s = m.geometry.boundingSphere; if (!s) continue;
+    m.visible = Math.hypot(s.center.x - P.x, s.center.z - P.z) - s.radius < far;
+  }
+  const v2 = GFX.view * GFX.view * 0.5;
+  for (const a of city.ai) { const q = a.mesh.position; a.mesh.visible = (q.x - P.x) * (q.x - P.x) + (q.z - P.z) * (q.z - P.z) < v2; }
+  for (const p of city.peds) { const q = p.g.position; p.g.visible = (q.x - P.x) * (q.x - P.x) + (q.z - P.z) * (q.z - P.z) < v2 * 0.3; }
+}
 function cityAiStep(dt, P) {
+  cityGfxCull(P);
   for (const a of city.ai) {
     const s = a.seg;
     let vt = a.vt;
@@ -3686,7 +3757,7 @@ function cityUpdateView(dt) {
   city.facadeMat.emissiveIntensity = hemi.intensity < 0.55 ? 1 : 0;
   for (const p of city.peds) {
     p.s += p.dir * p.sp * dt;
-    if (Math.abs(p.s) > 175) p.dir *= -1;
+    if (Math.abs(p.s) > CITY_MAX * 30 - 5) p.dir *= -1;
     const off = (CITY_HW + 1.6) * p.side, line = p.axis === 0 ? cZ(p.line) : cX(p.line);
     p.ph += dt * 7;
     if (p.axis === 0) { p.g.position.set(p.s, Math.abs(Math.sin(p.ph)) * 0.04 + 0.16, line + off); p.g.rotation.y = p.dir > 0 ? -Math.PI / 2 : Math.PI / 2; }
@@ -3708,7 +3779,7 @@ function enterCity(P) {
   if (!city.built) buildCity();
   city.retZ = rampZ(P.z);
   city.on = true; showHighway(false); city.group.visible = true; clearTraffic();
-  P.x = 3.5; P.z = 268; P.yaw = 0; city.camYaw = 0; city.sv = Math.min(P.v, 16); city.dir = 1; P.v = city.sv; gs.safe = 2; city.emptyT = 0;
+  P.x = 3.5; P.z = cZ(CITY_MAX) + 88; P.yaw = 0; city.camYaw = 0; city.sv = Math.min(P.v, 16); city.dir = 1; P.v = city.sv; gs.safe = 2; city.emptyT = 0;
   hop.y = hop.vy = 0; el.btnCity.classList.remove('hidden'); fadeFx();
   toast('🏙 Город · кнопка «Трасса» (T) вернёт на шоссе');
 }
@@ -3742,7 +3813,7 @@ function cityStep(P, inp, dt) {
   }
   const empty = gs.fuel <= 0;
   if (!admin.god) { const v = P.v; gs.fuel = Math.max(0, gs.fuel - (0.01 + 0.0015 * v + 0.00006 * v * v) / 60 * dt); }
-  if (gs.fuel < 0.15 && !gs.warned) { gs.warned = true; toast(fuelIc() + ' Мало топлива — заправка на площади слева от въезда'); }
+  if (gs.fuel < 0.15 && !gs.warned) { gs.warned = true; toast(fuelIc() + ' Мало топлива — ищи в городе знак «АЗС»'); }
   if (gs.fuel > 0.3) gs.warned = false;
   let thr = empty ? 0 : inp.throttle, brk = inp.brake, sv = c.sv;
   const vs = Math.abs(sv) / SPEEDSCALE, res = (0.12 + 0.00045 * vs * vs) * Math.sign(sv || 1);
@@ -3760,7 +3831,7 @@ function cityStep(P, inp, dt) {
   P.yaw += yr * dt; P.yaw = Math.atan2(Math.sin(P.yaw), Math.cos(P.yaw));
   P.steer = inp.steer; P.aLat = sv * yr; P.scrape = false;
   P.x += Math.sin(P.yaw) * sv * dt; P.z -= Math.cos(P.yaw) * sv * dt;
-  P.x = clamp(P.x, -246, 246); P.z = clamp(P.z, -246, 299);
+  P.x = clamp(P.x, -(CITY_MAX * 30 + 66), CITY_MAX * 30 + 66); P.z = clamp(P.z, -(CITY_MAX * 30 + 66), cZ(CITY_MAX) + 119);
   // столкновения со зданиями
   const fx = Math.sin(P.yaw), fz = -Math.cos(P.yaw), r = PLAYER_DIM.wid / 2, d = Math.max(0, (PLAYER_DIM.len - PLAYER_DIM.wid) / 2);
   const safe = P.god || gs.safe > 0; if (gs.safe > 0) gs.safe -= dt;
@@ -3795,14 +3866,13 @@ function cityStep(P, inp, dt) {
     else { c.sv *= 0.6; P.scrape = worst > 2; }
   }
   // заправка в городе
-  const pd = c.pad;
-  gs.fueling = !!(pd && P.v < 0.8 && gs.fuel < 0.999 && P.x > pd.x0 && P.x < pd.x1 && P.z > pd.z0 && P.z < pd.z1);
+  gs.fueling = P.v < 0.8 && gs.fuel < 0.999 && c.pads.some(pd => P.x > pd.x0 && P.x < pd.x1 && P.z > pd.z0 && P.z < pd.z1);
   pumpHose.visible = false;
   if (gs.fueling) doFuel(P, dt);
   // кончилось топливо — эвакуатор на шоссе
   if (empty && P.v < 0.3) { c.emptyT += dt; if (c.emptyT > 3) { c.emptyT = 0; gs.fuel = 0.08; toast('🚚 Эвакуатор увёз на трассу'); returnToHighway(P); return; } } else c.emptyT = 0;
   cityAiStep(dt, P);
-  if (P.z > 278) returnToHighway(P);
+  if (P.z > cZ(CITY_MAX) + 98) returnToHighway(P);
 }
 function cityCam(P, dt, V, k) {
   let dd = P.yaw - city.camYaw; dd = Math.atan2(Math.sin(dd), Math.cos(dd)); city.camYaw += dd * Math.min(1, dt * 4);
