@@ -206,6 +206,11 @@
   #glassFx { position: absolute; inset: 0; z-index: 3; pointer-events: none; width: 100%; height: 100%; display: none; }
   #speedFx { position: absolute; inset: 0; z-index: 3; pointer-events: none; opacity: 0;
     background: radial-gradient(ellipse at center, transparent 52%, rgba(255,255,255,.16) 100%); }
+  #arrestFx { position: absolute; inset: 0; z-index: 15; pointer-events: none; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; animation: arrestFlash .5s steps(1) infinite; }
+  #arrestFx.on { display: flex; }
+  #arrestFx .at { font-size: clamp(34px, 9vw, 86px); font-weight: 900; color: #fff; letter-spacing: 2px; text-shadow: 0 4px 24px #000, 0 0 12px #000; padding: 10px 24px; background: rgba(0,0,0,.55); border-radius: 16px; }
+  #arrestFx .as { margin-top: 12px; font-size: clamp(14px, 3.4vw, 24px); color: #fff; text-shadow: 0 2px 10px #000; }
+  @keyframes arrestFlash { 0% { background: rgba(255,30,30,.28); } 50% { background: rgba(30,90,255,.28); } }
   #polHud { position: absolute; top: 84px; left: 50%; transform: translateX(-50%); z-index: 6; display: none; padding: 7px 14px; border-radius: 12px; background: rgba(120,10,10,.82); color: #fff; font-size: 15px; text-align: center; animation: polblink .5s infinite alternate; border: 1px solid rgba(255,120,120,.6); }
   @keyframes polblink { from { box-shadow: 0 0 14px 2px rgba(255,40,40,.7); } to { box-shadow: 0 0 14px 2px rgba(40,100,255,.8); } }
   #polHud .pbar { margin-top: 5px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.25); overflow: hidden; } #polHud .pbar i { display: block; height: 100%; background: #ffd24a; }
@@ -230,6 +235,7 @@
   <button id="stWalk">▲</button>
 
   <div id="polHud"></div>
+  <div id="arrestFx"><div class="at">🚔 ЗААРЕШТОВАНО</div><div class="as">Поліція тебе наздогнала</div></div>
   <div id="wheelHud"><div id="wheelTxt"></div><div class="wbar"><i id="wheelMark"></i></div></div>
 
   <div id="hud">
@@ -1461,12 +1467,12 @@ function makeMopedMesh(color, opts) {
 
 // ---------- электросамокаты Kukirin G2…G4 Max ----------
 const SCO = {
-  kukg2p: { r: 0.13, w: 0.085, wb: 1.0, acc: 0x2fd1a0, dual: false },
-  kukg2m: { r: 0.14, w: 0.1, wb: 1.05, acc: 0x4da3ff, dual: false },
-  kukg3:  { r: 0.14, w: 0.1, wb: 1.1, acc: 0xff7a2f, dual: false },
-  kukg3p: { r: 0.145, w: 0.11, wb: 1.14, acc: 0xffc22f, dual: false },
-  kukg4:  { r: 0.15, w: 0.12, wb: 1.2, acc: 0xe84545, dual: true },
-  kukg4m: { r: 0.165, w: 0.14, wb: 1.28, acc: 0xb47cff, dual: true },
+  kukg2p: { r: 0.16, w: 0.09, wb: 1.0, acc: 0x2fd1a0, dual: false, kk: true, lab: 'G2 PRO' },
+  kukg2m: { r: 0.17, w: 0.1, wb: 1.05, acc: 0x4da3ff, dual: false, kk: true, lab: 'G2 MAX' },
+  kukg3:  { r: 0.18, w: 0.11, wb: 1.1, acc: 0xff7a1a, dual: false, kk: true, lab: 'G3' },
+  kukg3p: { r: 0.185, w: 0.115, wb: 1.14, acc: 0xffc22f, dual: false, kk: true, lab: 'G3 PRO' },
+  kukg4:  { r: 0.19, w: 0.125, wb: 1.2, acc: 0xff7a1a, dual: true, kk: true, lab: 'G4' },
+  kukg4m: { r: 0.205, w: 0.14, wb: 1.28, acc: 0xb47cff, dual: true, kk: true, lab: 'G4 MAX' },
   kukdtstorm: { r: 0.165, w: 0.14, wb: 1.3, acc: 0x00d1ff, dual: true, bar: 0.7 },
   kukdtthunder: { r: 0.17, w: 0.15, wb: 1.38, acc: 0xffc400, dual: true, bar: 0.76 },
   kukebvarg:    { r: 0.33, w: 0.11, wb: 1.28, acc: 0xff5a1f, bike: true, frame: 0x1c1c1f, plastic: 0xf2f2f2, tank: 0x1c1c1f },
@@ -1535,10 +1541,108 @@ function makeEbikeMesh(color, opts, P) {
   g.userData = { wheels: [wf, wr], pivots: [fork], r, rot: 0, tailMat: opts.player ? M.tailPlayer : null, rider, rimR: r * 0.62, rimW: P.w, wy: r, paint: plast };
   return g;
 }
+
+// --- Kukirin G-серія за фото: сірий корпус, чорна стійка, помаранчеві «шашечки», товсті колеса, задній степ ---
+const KKT = { ck: {}, lab: {} };
+function kkChecker(acc) {
+  return KKT.ck[acc] || (KKT.ck[acc] = (() => {
+    const tx = stCanvas(64, 32, (g, w, h) => {
+      g.fillStyle = '#17181b'; g.fillRect(0, 0, w, h);
+      g.fillStyle = '#' + acc.toString(16).padStart(6, '0');
+      for (let y = 0; y < 4; y++) for (let x = 0; x < 8; x++) if ((x + y) % 2 === 0) g.fillRect(x * 8, y * 8, 8, 8);
+    });
+    tx.magFilter = THREE.NearestFilter; return new THREE.MeshLambertMaterial({ map: tx });
+  })());
+}
+function kkLabel(txt, acc) {
+  const key = txt + acc;
+  return KKT.lab[key] || (KKT.lab[key] = new THREE.MeshLambertMaterial({ transparent: true, map: stCanvas(64, 256, (g, w, h) => {
+    g.translate(w / 2, h / 2); g.rotate(-Math.PI / 2); g.fillStyle = '#' + acc.toString(16).padStart(6, '0');
+    g.font = 'bold 40px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, 0, 2);
+  }) }));
+}
+function makeKukMesh(color, opts, P) {
+  const G = scoGeo(P), r = P.r, wb = P.wb, hz = wb / 2, acc = P.acc;
+  const g = new THREE.Group(); g.rotation.order = 'YXZ';
+  const grey = matFor(0x6b6e74), grey2 = matFor(0x54575d), blk = matFor(0x17181b), accM = new THREE.MeshLambertMaterial({ color: acc });
+  const ck = kkChecker(acc);
+  const jacket = matFor(0x2d4a7a), jeans = matFor(0x2a3140), helmet = matFor(0xf2f2f2), glove = matFor(0x151515);
+  const wf = makeWheel(G, 3), wr = makeWheel(G, 3);
+  const rotor = new THREE.CylinderGeometry(r * 0.46, r * 0.46, 0.008, 14).rotateZ(Math.PI / 2);
+  add(wf.spin, rotor, M.chrome, P.w / 2 + 0.006, 0, 0); add(wr.spin, rotor, M.chrome, -(P.w / 2 + 0.006), 0, 0);
+  wr.pivot.position.set(0, r, hz); g.add(wr.pivot);
+  const fork = new THREE.Group(); fork.position.set(0, 0, -hz); g.add(fork);
+  wf.pivot.position.set(0, r, 0); fork.add(wf.pivot);
+  const patch = (par, w, h, x, y, z, sx) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), ck); m.position.set(x, y, z); m.rotation.y = sx * Math.PI / 2; par.add(m); return m; };
+  // --- передня частина: рульова стійка, шарнір складання, дві важільні вилки ---
+  const top = 1.12, sz0 = 0.2, sz1 = 0.36, nb = r + 0.16;
+  barIn(fork, [0, nb, sz0], [0, top, sz1], 0.055, blk);
+  add(fork, box(0.15, 0.2, 0.17), grey, 0, nb - 0.02, sz0 - 0.01);
+  for (const sx of [-1, 1]) {
+    barIn(fork, [sx * 0.092, nb - 0.07, sz0], [sx * 0.098, r, 0.0], 0.05, grey2);
+    patch(fork, 0.1, 0.06, sx * 0.124, r + 0.05, 0.1, sx);
+    patch(fork, 0.07, 0.07, sx * 0.076, nb + 0.0, sz0 - 0.095, sx);
+  }
+  add(fork, box(0.14, 0.02, 0.34), blk, 0, 2 * r + 0.03, -0.02);                       // переднє крило
+  const tH = 0.42, hy = nb + (top - nb) * tH, hzp = sz0 + (sz1 - sz0) * tH;
+  add(fork, box(0.1, 0.12, 0.11), blk, 0, hy, hzp);                                    // шарнір складання
+  add(fork, box(0.03, 0.1, 0.045), M.chrome, 0.065, hy, hzp);
+  add(fork, box(0.105, 0.014, 0.115), accM, 0, hy + 0.067, hzp);
+  const dec = new THREE.Group(); dec.position.set(0, nb + (top - nb) * 0.66, sz0 + (sz1 - sz0) * 0.66); dec.rotation.x = Math.atan2(sz1 - sz0, top - nb); fork.add(dec);
+  for (const sx of [-1, 1]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.4), kkLabel('KuKirin ' + (P.lab || 'G4'), acc)); m.position.x = sx * 0.029; m.rotation.y = sx * Math.PI / 2; dec.add(m); }
+  add(fork, box(0.64, 0.03, 0.03), blk, 0, top, sz1);                                    // кермо
+  for (const sx of [-1, 1]) {
+    add(fork, box(0.11, 0.04, 0.04), glove, sx * 0.3, top, sz1);
+    add(fork, box(0.07, 0.015, 0.1), M.chrome, sx * 0.27, top + 0.02, sz1 - 0.07);
+    barIn(fork, [sx * 0.29, top - 0.01, sz1], [sx * 0.07, nb + 0.12, sz0 + 0.02], 0.009, blk);   // тросики
+  }
+  add(fork, box(0.13, 0.07, 0.04), blk, 0, top + 0.05, sz1 - 0.03);                      // дисплей
+  add(fork, box(0.1, 0.012, 0.015), accM, 0, top + 0.06, sz1 - 0.054);
+  add(fork, box(0.022, 0.2, 0.006), accM, 0.05, top - 0.15, sz1 - 0.045);                // помаранчевий ремінець
+  add(fork, box(0.11, 0.09, 0.07), blk, 0, top - 0.12, sz1 - 0.07);                       // фара
+  add(fork, box(0.08, 0.05, 0.02), M.head, 0, top - 0.12, sz1 - 0.11);
+  const hs = new THREE.Sprite(GLOW.head); hs.position.set(0, top - 0.12, sz1 - 0.2); hs.scale.set(1.3, 1.3, 1); fork.add(hs);
+  // --- дека ---
+  const dy = r + 0.09, dl = wb * 0.7;
+  add(g, box(0.2, 0.1, dl), grey, 0, dy, -0.0);
+  add(g, box(0.19, 0.012, dl * 0.86), blk, 0, dy + 0.056, -0.01);
+  add(g, box(0.1, 0.004, 0.05), matFor(0x2c2e33), 0, dy + 0.064, 0.22);
+  add(g, box(0.17, 0.07, dl * 0.64), blk, 0, dy - 0.07, 0.0);                           // батарея знизу
+  if (P.dual) add(g, box(0.2, 0.03, dl * 0.5), accM, 0, dy - 0.115, 0.0);
+  for (const sx of [-1, 1]) { patch(g, 0.13, 0.06, sx * 0.101, dy - 0.0, -dl * 0.32, sx); patch(g, 0.13, 0.06, sx * 0.101, dy, dl * 0.34, sx); }
+  barIn(g, [0, dy - 0.04, 0.02], [0, 0.0, 0.12], 0.02, M.dark);                         // підніжка-кікстенд
+  // --- задня частина: важіль, крило, степ ---
+  for (const sx of [-1, 1]) {
+    barIn(g, [sx * 0.105, dy, dl / 2 - 0.02], [sx * 0.098, r, hz], 0.05, grey2);
+    patch(g, 0.1, 0.06, sx * 0.126, r + 0.05, hz - 0.12, sx);
+  }
+  add(g, box(0.15, 0.025, 0.34), blk, 0, 2 * r + 0.035, hz + 0.02);
+  add(g, box(0.15, 0.02, 0.22), blk, 0, 2 * r + 0.01, hz + 0.28).rotation.x = 0.5;
+  add(g, box(0.2, 0.045, 0.2), blk, 0, r + 0.21, hz - 0.2);                               // ребристий степ
+  for (let k = -1; k <= 1; k++) add(g, box(0.19, 0.012, 0.02), M.dark, 0, r + 0.237, hz - 0.2 + k * 0.06);
+  add(g, box(0.1, 0.04, 0.03), opts.player ? M.tailPlayer : M.tail, 0, 2 * r - 0.03, hz + 0.4);
+  const ts = new THREE.Sprite(GLOW.tail); ts.position.set(0, 2 * r, hz + 0.46); ts.scale.set(1.1, 1.1, 1); g.add(ts);
+  // --- райдер ---
+  const rider = new THREE.Group(); g.add(rider);
+  const ry = r + 0.14 - 0.235; rider.position.y = ry;
+  const dz = -hz + 0.62;
+  add(rider, box(0.4, 0.56, 0.22), jacket, 0, 1.3, dz + 0.08).rotation.x = -0.12;
+  add(rider, new THREE.SphereGeometry(0.15, 12, 10), helmet, 0, 1.73, dz + 0.0);
+  add(rider, box(0.2, 0.07, 0.12), M.black, 0, 1.71, dz - 0.1);
+  for (const sx of [-1, 1]) {
+    add(rider, box(0.15, 0.85, 0.16), jeans, sx * 0.11, 0.66, dz + (sx < 0 ? -0.05 : 0.2));
+    barIn(rider, [sx * 0.2, 1.48, dz + 0.0], [sx * 0.31, top - ry, -hz + sz1], 0.07, jacket);
+  }
+  const sh = new THREE.Mesh(G.shadow, M.shadow);
+  sh.rotation.x = -Math.PI / 2; sh.position.y = 0.04; g.add(sh);
+  g.userData = { wheels: [wf, wr], pivots: [fork], r, rot: 0, tailMat: opts.player ? M.tailPlayer : null, rider, rimR: r * 0.62, rimW: P.w, wy: r, paint: grey };
+  return g;
+}
 function makeScooterMesh(color, opts) {
   opts = opts || {};
   const P = SCO[opts.model] || SCO.kukg3, G = scoGeo(P), r = P.r, wb = P.wb, hz = wb / 2;
   if (P.bike) return makeEbikeMesh(color, opts, P);
+  if (P.kk) return makeKukMesh(color, opts, P);
   const g = new THREE.Group(); g.rotation.order = 'YXZ';
   const paint = paintFor(color), acc = new THREE.MeshLambertMaterial({ color: P.acc });
   const jacket = matFor(0x2d4a7a), jeans = matFor(0x2a3140), helmet = matFor(0xf2f2f2), glove = matFor(0x151515);
@@ -1934,7 +2038,7 @@ function buildSedanCabin(V, color) {
 
 function buildMopedCabin(kuk) {
   const gm = gaugePlane(kuk ? 0.12 : 0.15);
-  if (kuk) { gm.position.set(0, 1.152, -(SCO[kuk] || SCO.kukg3).wb / 2 + 0.1); gm.rotation.x = -0.7; }
+  if (kuk) { gm.position.set(0, 1.152, -(SCO[kuk] || SCO.kukg3).wb / 2 + ((SCO[kuk] || SCO.kukg3).kk ? 0.33 : 0.1)); gm.rotation.x = -0.7; }
   else { gm.position.set(0, 1.115, -0.49); gm.rotation.x = -0.95; }
   cabBody.add(gm);
   cab.steer = null;
@@ -3807,25 +3911,23 @@ function buildCity() {
   city.facadeMat.emissiveIntensity = 0;
   const flatMat = new THREE.MeshLambertMaterial({ vertexColors: true });
   const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true });
-  { const gB = MB(); mbBox(gB, 0, -0.3, 100, 2400, 0.5, 2400, 0x73777c); G.add(mbMesh(gB, flatMat)); }   // земля (постоянная)
+  { const gB = MB(); mbBox(gB, 0, -0.3, 0, 7000, 0.5, 7000, 0x73777c); const gm = mbMesh(gB, flatMat); gm.userData.chunks = false; G.add(gm); city.ground = gm; }   // земля (їде за гравцем)
   const PAL = [0xc9ccd4, 0xb7a89a, 0xd6cfc0, 0x9aa7b8, 0xb8c4c0, 0xcfa58f, 0x8d95a3];
-  const GAS = [[CITY_CC - 1, CITY_MAX - 1], [CITY_CC + 3, 3], [CITY_CC - 4, CITY_CC + 2], [CITY_CC + 5, CITY_CC + 6], [CITY_CC - 5, 2], [CITY_CC + 8, 6], [CITY_CC - 8, CITY_CC + 7]];
-  for (let k = 0; k < 14; k++) GAS.push([3 + ((k * 17 + 5) % (CITY_MAX - 6)), 2 + ((k * 29 + 11) % (CITY_MAX - 6))]);
-  const gasBlock = (bi, bj) => GAS.some(g => g[0] === bi && g[1] === bj);
+  const gasBlock = (bi, bj) => {
+    if (bi === CITY_CC - 1 && bj === CITY_MAX - 1) return true;
+    let h = (Math.imul(bi, 374761393) + Math.imul(bj, 668265263)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16;
+    return (h >>> 0) % 11 === 0;
+  };
   const blockRect = (bi, bj) => {
-    const x0 = cX(bi) + HW, x1 = cX(bi + 1) - HW, z0 = cZ(bj) + HW, z1 = bj === CITY_MAX ? cZ(CITY_MAX) + 113 : cZ(bj + 1) - HW;
+    const x0 = cX(bi) + HW, x1 = cX(bi + 1) - HW, z0 = cZ(bj) + HW, z1 = cZ(bj + 1) - HW;
     return { x0, x1, z0, z1, mx: (x0 + x1) / 2, mz: (z0 + z1) / 2, w: x1 - x0, d: z1 - z0 };
   };
-  for (let bi = -1; bi <= CITY_MAX; bi++) for (let bj = -1; bj <= CITY_MAX; bj++) if (gasBlock(bi, bj)) {
-    const r = blockRect(bi, bj); city.gasBlocks.push(r); city.pads.push({ x0: r.mx - 8, x1: r.mx + 8, z0: r.mz - 5.5, z1: r.mz + 5.5 });
-  }
   const asph = 0x3a3d43, line = 0xe8e8e0;
   city.chunks = new Map(); city.CH = CH;
   const chIdx = v => Math.floor(v / CH);
   city.buildChunk = (ci, cj) => {
-    const bld = MB(), flat = MB(), glow = MB(), boxes = [], cg = new THREE.Group(); cg.userData.chunks = true;
+    const bld = MB(), flat = MB(), glow = MB(), boxes = [], pads = [], cg = new THREE.Group(); cg.userData.chunks = true;
     for (let bi = ci * CH; bi < ci * CH + CH; bi++) for (let bj = cj * CH; bj < cj * CH + CH; bj++) {
-      if (bi < -1 || bi > CITY_MAX || bj < -1 || bj > CITY_MAX) continue;
       let seed = (((bi + 9) * 73856093) ^ ((bj + 9) * 19349663)) >>> 0; const R = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
       const { x0, x1, z0, z1, mx, mz, w, d } = blockRect(bi, bj), gas = gasBlock(bi, bj);
       mbBox(flat, mx, 0.07, mz, w, 0.16, d, gas ? 0x3d4046 : 0x9a9da3);          // тротуар / площадка
@@ -3833,7 +3935,7 @@ function buildCity() {
         mbBox(flat, lx, 3.2, lz, 0.18, 6.2, 0.18, 0x55595f); mbBox(glow, lx, 6.3, lz, 0.5, 0.2, 0.5, 0xfff0c0);
       }
       if (gas) {                                                                  // АЗС
-        const cx = mx, cz = mz;
+        const cx = mx, cz = mz; pads.push({ x0: mx - 8, x1: mx + 8, z0: mz - 5.5, z1: mz + 5.5 });
         mbBox(flat, cx, 5.4, cz, 16, 0.5, 12, 0xd8352f); mbBox(glow, cx, 5.1, cz, 15.4, 0.1, 11.4, 0xfff1cf);
         for (const [px, pz] of [[-7, -5], [7, -5], [-7, 5], [7, 5]]) mbBox(flat, cx + px, 2.6, cz + pz, 0.5, 5.2, 0.5, 0xe8e8ea);
         mbBox(flat, cx, 0.3, cz, 11, 0.25, 1.4, 0xb9bcc2);
@@ -3847,7 +3949,7 @@ function buildCity() {
       const lw = (w - 6 - 2) / 2, ld = (d - 6 - 2) / 2;
       for (let a = 0; a < 2; a++) for (let c = 0; c < 2; c++) {
         const cx = x0 + 3 + lw / 2 + a * (lw + 2), cz = z0 + 3 + ld / 2 + c * (ld + 2), r = R();
-        const dist = Math.hypot(cx, cz) / 900;
+        const dist = 1 - (0.5 + 0.5 * Math.sin(bi * 0.23 + 1) * Math.sin(bj * 0.19 + 2));
         if (r < 0.14) {
           mbBox(flat, cx, 0.2, cz, lw, 0.1, ld, 0x4f9a46);
           for (let k = 0; k < 4; k++) {
@@ -3855,7 +3957,7 @@ function buildCity() {
             mbBox(flat, tx, 1.4, tz, 0.4, 2.4, 0.4, 0x6b4a2b); mbBox(flat, tx, 3.6, tz, 2.6, 2.4, 2.6, 0x2f8a3c);
           }
         } else {
-          const h = r < 0.3 ? 5 + R() * 4 : 9 + R() * 28 * (1.15 - Math.min(0.9, dist)) + (R() < 0.12 ? 22 : 0);
+          const h = r < 0.3 ? 5 + R() * 4 : 9 + R() * 28 * (1.15 - Math.min(0.9, dist)) + (R() < 0.12 && dist < 0.6 ? 22 : 0);
           const col = PAL[Math.floor(R() * PAL.length)];
           mbBox(bld, cx, 0.1 + h / 2, cz, lw, h, ld, col, true);
           mbBox(flat, cx, h + 0.45, cz, lw * 0.8, 0.5, ld * 0.8, 0x6d6f75);
@@ -3866,24 +3968,18 @@ function buildCity() {
     // дороги, разметка, зебры, светофорные столбы
     const dash = (x, z, alongX) => mbBox(flat, x, 0.06, z, alongX ? 3 : 0.18, 0.02, alongX ? 0.18 : 3, line);
     for (let i = ci * CH; i < ci * CH + CH; i++) for (let j = cj * CH; j < cj * CH + CH; j++) {
-      if (i < 0 || i >= CITY_N || j < 0 || j >= CITY_N) continue;
       const cx = cX(i), cz = cZ(j);
       mbBox(flat, cx, 0.032, cz, 2 * HW, 0.04, 2 * HW, asph);
-      if (i < CITY_MAX) {
+      {
         mbBox(flat, cx + CITY_PITCH / 2, 0.03, cz, CITY_PITCH - 2 * HW, 0.04, 2 * HW, asph);
         for (let k = HW + 4; k < CITY_PITCH - HW - 2; k += 8) dash(cx + k, cz, true);
       }
-      if (j < CITY_MAX) {
+      {
         mbBox(flat, cx, 0.031, cz + CITY_PITCH / 2, 2 * HW, 0.04, CITY_PITCH - 2 * HW, asph);
         for (let k = HW + 4; k < CITY_PITCH - HW - 2; k += 8) dash(cx, cz + k, false);
       }
-      if (i === CITY_CC && j === CITY_MAX) {
-        mbBox(flat, cx, 0.031, cz + 60, 2 * HW, 0.04, 120, asph);
-        for (let z = cz + HW + 4; z < cz + 116; z += 8) dash(cx, z, false);
-      }
       for (let d = 0; d < 4; d++) {
         const [dx, dz] = CDIR[d], ni = i + dx, nj = j + dz;
-        if (!((ni >= 0 && ni < CITY_N && nj >= 0 && nj < CITY_N) || (i === CITY_CC && j === CITY_MAX && d === 2))) continue;
         for (let s = -HW + 1; s <= HW - 1; s += 2.0) {
           if (dx === 0) mbBox(flat, cx + s, 0.06, cz + dz * (HW + 2.2), 0.7, 0.02, 3, line);
           else mbBox(flat, cx + dx * (HW + 2.2), 0.06, cz + s, 3, 0.02, 0.7, line);
@@ -3893,33 +3989,27 @@ function buildCity() {
     }
     for (const [B, mat] of [[flat, flatMat], [bld, city.facadeMat], [glow, glowMat]]) for (const b of B.ch.values()) cg.add(mbMeshOne(b, mat));
     G.add(cg);
-    return { cg, boxes, ci, cj };
+    return { cg, boxes, pads, ci, cj };
   };
-  city.syncBoxes = () => { city.boxes.length = 0; for (const r of city.chunks.values()) for (const b of r.boxes) city.boxes.push(b); };
+  city.syncBoxes = () => { city.boxes.length = 0; city.pads.length = 0; for (const r of city.chunks.values()) { for (const b of r.boxes) city.boxes.push(b); for (const p of r.pads) city.pads.push(p); } };
   city.unload = key => {
     const r = city.chunks.get(key); if (!r) return;
     G.remove(r.cg);
     r.cg.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material.map && o.material !== city.facadeMat) o.material.map.dispose(); if (o.material && o !== r.cg && o.material !== city.facadeMat && o.material !== flatMat && o.material !== glowMat) o.material.dispose(); });
     city.chunks.delete(key);
   };
-  // ворота возврата
-  const gate = stPlane(G, stBoard('ТРАСА', '↓', '#1b5fb5'), 6, 3, 0, 7, cZ(CITY_MAX) + 112, Math.PI); gate.material.side = THREE.DoubleSide;
   // светофоры (головки)
   const hg = new THREE.OctahedronGeometry(0.4, 0), hm = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  const heads = new THREE.InstancedMesh(hg, hm, CITY_N * CITY_N * 4); heads.frustumCulled = false;
-  const mt = new THREE.Matrix4(); let n = 0; city.headIdx = [];
-  for (let i = 0; i < CITY_N; i++) for (let j = 0; j < CITY_N; j++) {
-    [[1, 1, 'ns'], [-1, -1, 'ns'], [1, -1, 'ew'], [-1, 1, 'ew']].forEach(([sx, sz, ax]) => {
-      mt.makeTranslation(cX(i) + sx * (HW + 1.2), 5.4, cZ(j) + sz * (HW + 1.2)); heads.setMatrixAt(n, mt);
-      heads.setColorAt(n, new THREE.Color(0x2ee86a)); city.headIdx.push([i, j, ax]); n++;
-    });
-  }
+  city.HWIN = 12;
+  const heads = new THREE.InstancedMesh(hg, hm, (2 * city.HWIN + 1) * (2 * city.HWIN + 1) * 4); heads.frustumCulled = false;
+  for (let n = 0; n < heads.count; n++) heads.setColorAt(n, new THREE.Color(0x2ee86a));
+  city.headIdx = []; city.hc = [null, null];
   G.add(heads); city.heads = heads;
   // ИИ-машины
   for (let k = 0; k < 120; k++) {
     const mesh = makeCarMesh(pick(CAR_COLORS), { lite: true, model: pick(CAR_MODELS) }); G.add(mesh);
     const a = { mesh, v: 0, vt: rnd(8, 12), hold: 0 };
-    cityPlaceAi(a); city.ai.push(a);
+    cityPlaceAi(a, app.P || { x: 0, z: 0 }); city.ai.push(a);
   }
   // пешеходы
   const pg = [new THREE.BoxGeometry(0.34, 0.8, 0.2), new THREE.BoxGeometry(0.44, 0.6, 0.24), new THREE.SphereGeometry(0.13, 8, 6)];
@@ -3930,8 +4020,8 @@ function buildCity() {
     const tor = new THREE.Mesh(pg[1], stMat(cl)); tor.position.y = 1.1;
     const hd = new THREE.Mesh(pg[2], stMat(0xe0b48c)); hd.position.y = 1.55;
     g.add(legs, tor, hd); G.add(g);
-    const axis = Math.random() < 0.5 ? 0 : 1, line = Math.floor(Math.random() * CITY_N), side = Math.random() < 0.5 ? -1 : 1;
-    city.peds.push({ g, axis, line, side, s: rnd(-(CITY_MAX * 30 - 10), CITY_MAX * 30 - 10), dir: Math.random() < 0.5 ? 1 : -1, sp: rnd(1.1, 1.7), ph: rnd(0, 6) });
+    const pd = { g, axis: 0, line: 0, side: Math.random() < 0.5 ? -1 : 1, s: 0, dir: Math.random() < 0.5 ? 1 : -1, sp: rnd(1.1, 1.7), ph: rnd(0, 6) };
+    cityPlacePed(pd, app.P || { x: 0, z: 0 }); city.peds.push(pd);
   }
   city.built = true;
 }
@@ -3952,13 +4042,17 @@ function cityLineSeg(i, j, d) {
   const p1 = [nx - dv[0] * HW + rv[0] * 3.5, nz - dv[1] * HW + rv[1] * 3.5];
   return { type: 'line', p0, p1, q: null, len: CITY_PITCH - 2 * HW, ni, nj, d };
 }
-function cityOuts(i, j, din) {
-  const o = [];
-  for (let d = 0; d < 4; d++) { if (d === (din + 2) % 4) continue; const ni = i + CDIR[d][0], nj = j + CDIR[d][1]; if (ni >= 0 && ni < CITY_N && nj >= 0 && nj < CITY_N) o.push(d); }
-  return o.length ? o : [(din + 2) % 4];
+function cityOuts(i, j, din) { return [0, 1, 2, 3].filter(d => d !== (din + 2) % 4); }
+function cityPlacePed(p, P) {
+  const bx = Math.round(P.x / CITY_PITCH) + CITY_CC, bz = Math.round(P.z / CITY_PITCH) + CITY_CC;
+  p.axis = Math.random() < 0.5 ? 0 : 1;
+  if (p.axis === 0) { p.line = bz + Math.floor(rnd(-4, 5)); p.s = P.x + rnd(-220, 220); } else { p.line = bx + Math.floor(rnd(-4, 5)); p.s = P.z + rnd(-220, 220); }
 }
-function cityPlaceAi(a) {
-  const i = Math.floor(rnd(0, CITY_N)), j = Math.floor(rnd(0, CITY_N)), d = pick(cityOuts(i, j, Math.floor(rnd(0, 4))));
+function cityPlaceAi(a, P) {
+  const bx = Math.round(P.x / CITY_PITCH) + CITY_CC, bz = Math.round(P.z / CITY_PITCH) + CITY_CC;
+  let i = bx, j = bz;
+  for (let k = 0; k < 10; k++) { i = bx + Math.floor(rnd(-8, 9)); j = bz + Math.floor(rnd(-8, 9)); if (Math.hypot(cX(i) - P.x, cZ(j) - P.z) > 220) break; }
+  const d = pick(cityOuts(i, j, Math.floor(rnd(0, 4))));
   a.d = d; a.nextD = d; a.seg = citySeg(i, j, d, d); a.s = rnd(0, a.seg.len); a.pos = [0, 0]; a.yaw = 0; a.v = rnd(0, 6);
   cityEval(a);
 }
@@ -3970,10 +4064,10 @@ function cityEval(a) {
     tx = 2 * u * (s.q[0] - s.p0[0]) + 2 * t * (s.p1[0] - s.q[0]); tz = 2 * u * (s.q[1] - s.p0[1]) + 2 * t * (s.p1[1] - s.q[1]);
   } else { x = s.p0[0] + (s.p1[0] - s.p0[0]) * t; z = s.p0[1] + (s.p1[1] - s.p0[1]) * t; tx = s.p1[0] - s.p0[0]; tz = s.p1[1] - s.p0[1]; }
   a.pos[0] = x; a.pos[1] = z; a.yaw = Math.atan2(tx, -tz);
-  a.mesh.position.set(x, 0, z); a.mesh.rotation.y = -a.yaw;
+  if (a.mesh) { a.mesh.position.set(x, 0, z); a.mesh.rotation.y = -a.yaw; }
 }
 function cityLight(i, j, ax, t) {
-  const ph = (t + ((i + j) % 3) * 8) % 24, p = ax === 'ns' ? ph : (ph + 12) % 24;
+  const ph = (t + ((((i + j) % 3) + 3) % 3) * 8) % 24, p = ax === 'ns' ? ph : (ph + 12) % 24;
   return p < 9 ? 0 : p < 11 ? 1 : 2;                         // 0 зелёный, 1 жёлтый, 2 красный
 }
 function cityChunks(P, sync) {
@@ -3982,19 +4076,20 @@ function cityChunks(P, sync) {
   const cc = (ci, cj) => [cX(ci * city.CH + (city.CH - 1) / 2), cZ(cj * city.CH + (city.CH - 1) / 2)];
   let changed = false;
   for (const [key, r] of city.chunks) { const [x, z] = cc(r.ci, r.cj); if ((x - P.x) ** 2 + (z - P.z) ** 2 > keep2) { city.unload(key); changed = true; } }
-  const maxI = Math.floor(CITY_MAX / city.CH), need = [];
-  for (let ci = -1; ci <= maxI; ci++) for (let cj = -1; cj <= maxI; cj++) {
+  const ci0 = Math.floor((P.x / CITY_PITCH + CITY_CC) / city.CH), cj0 = Math.floor((P.z / CITY_PITCH + CITY_CC) / city.CH), R = Math.ceil(lim / CHs) + 1, need = [];
+  for (let ci = ci0 - R; ci <= ci0 + R; ci++) for (let cj = cj0 - R; cj <= cj0 + R; cj++) {
     if (city.chunks.has(ci + ',' + cj)) continue;
     const [x, z] = cc(ci, cj), d2 = (x - P.x) ** 2 + (z - P.z) ** 2;
     if (d2 < lim2) need.push([d2, ci, cj]);
   }
   need.sort((a, b) => a[0] - b[0]);
-  const n = sync ? need.filter(q => q[0] < 260 * 260).length : 1;
+  const n = sync ? need.filter(q => q[0] < 260 * 260).length : (P.v > 60 ? 4 : P.v > 30 ? 2 : 1);
   for (let k = 0; k < Math.min(n, need.length); k++) { const [, ci, cj] = need[k]; city.chunks.set(ci + ',' + cj, city.buildChunk(ci, cj)); changed = true; }
   if (changed) city.syncBoxes();
 }
 function cityGfxCull(P) {
   cityChunks(P, false);
+  if (city.ground) city.ground.position.set(P.x, 0, P.z);
   const far = scene.fog.far + 40;
   for (const grp of city.group.children) if (grp.userData.chunks) for (const m of grp.children) {
     const s = m.geometry.boundingSphere; if (!s) continue;
@@ -4008,6 +4103,7 @@ function cityAiStep(dt, P) {
   cityGfxCull(P);
   if (game.mEmpty) return;
   for (const a of city.ai) {
+    if ((a.pos[0] - P.x) ** 2 + (a.pos[1] - P.z) ** 2 > 560 * 560) cityPlaceAi(a, P);
     const s = a.seg;
     let vt = a.vt;
     if (a.hold > 0) { a.hold -= dt; vt = 0; }
@@ -4035,7 +4131,18 @@ function cityAiStep(dt, P) {
 }
 
 function cityUpdateView(dt) {
-  // светофоры
+  const P = app.P, HWN = city.HWIN;
+  const iC = Math.round(P.x / CITY_PITCH) + CITY_CC, jC = Math.round(P.z / CITY_PITCH) + CITY_CC;
+  if (city.heads && (iC !== city.hc[0] || jC !== city.hc[1])) {            // вікно світлофорів їде за гравцем
+    city.hc = [iC, jC]; city.headIdx.length = 0;
+    const mt = new THREE.Matrix4(); let n = 0;
+    for (let i = iC - HWN; i <= iC + HWN; i++) for (let j = jC - HWN; j <= jC + HWN; j++) {
+      [[1, 1, 'ns'], [-1, -1, 'ns'], [1, -1, 'ew'], [-1, 1, 'ew']].forEach(([sx, sz, ax]) => {
+        mt.makeTranslation(cX(i) + sx * (CITY_HW + 1.2), 5.4, cZ(j) + sz * (CITY_HW + 1.2)); city.heads.setMatrixAt(n, mt); city.headIdx.push([i, j, ax]); n++;
+      });
+    }
+    city.heads.instanceMatrix.needsUpdate = true; city.lightT = 0;
+  }
   city.lightT -= dt;
   if (city.lightT <= 0 && city.heads) {
     city.lightT = 0.25;
@@ -4046,11 +4153,11 @@ function cityUpdateView(dt) {
   city.facadeMat.emissiveIntensity = hemi.intensity < 0.55 ? 1 : 0;
   for (const p of city.peds) {
     p.s += p.dir * p.sp * dt;
-    if (Math.abs(p.s) > CITY_MAX * 30 - 5) p.dir *= -1;
     const off = (CITY_HW + 1.6) * p.side, line = p.axis === 0 ? cZ(p.line) : cX(p.line);
     p.ph += dt * 7;
     if (p.axis === 0) { p.g.position.set(p.s, Math.abs(Math.sin(p.ph)) * 0.04 + 0.16, line + off); p.g.rotation.y = p.dir > 0 ? -Math.PI / 2 : Math.PI / 2; }
     else { p.g.position.set(line + off, Math.abs(Math.sin(p.ph)) * 0.04 + 0.16, p.s); p.g.rotation.y = p.dir > 0 ? Math.PI : 0; }
+    if ((p.g.position.x - P.x) ** 2 + (p.g.position.z - P.z) ** 2 > 340 * 340) cityPlacePed(p, P);
   }
 }
 
@@ -4071,12 +4178,14 @@ function enterCity(P) {
   city.on = true; showHighway(false); city.group.visible = true; clearTraffic();
   if (game.mCity && Net.role !== 'solo') { P.x = -5 + (Net.myId % 5) * 2.5; P.z = cZ(CITY_MAX) + 88 - Math.floor(Net.myId / 5) * 7; } else { P.x = 3.5; P.z = cZ(CITY_MAX) + 88; }
   P.yaw = 0; city.camYaw = 0; city.sv = Math.min(P.v, 16); city.dir = 1; P.v = city.sv; gs.safe = 2; city.emptyT = 0;
-  hop.y = hop.vy = 0; if (!game.mCity) el.btnCity.classList.remove('hidden'); fadeFx(); cityChunks(P, true);
+  hop.y = hop.vy = 0; if (!game.mCity) el.btnCity.classList.remove('hidden'); fadeFx(); policeReset();
+  for (const a of city.ai) cityPlaceAi(a, P); for (const p of city.peds) cityPlacePed(p, P); city.hc = [null, null];
+  cityChunks(P, true);
   toast(game.mCity ? (Net.role === 'solo' ? '🏙 Режим «Місто»' : '🏙 Онлайн у місті — гравці поруч') : '🏙 Місто · кнопка «Траса» (T) поверне на шосе');
 }
 function exitCityRaw() {
   if (!city.on) return;
-  city.on = false; city.group.visible = false; for (const k of [...city.chunks.keys()]) city.unload(k); city.syncBoxes(); showHighway(true); el.btnCity.classList.add('hidden');
+  city.on = false; policeReset(); city.group.visible = false; for (const k of [...city.chunks.keys()]) city.unload(k); city.syncBoxes(); showHighway(true); el.btnCity.classList.add('hidden');
 }
 function returnToHighway(P) {
   if (!city.on || game.mCity) return;
@@ -4111,9 +4220,10 @@ function cityStep(P, inp, dt) {
   let a = 0;
   if (thr > 0.02) a = sv < -0.2 ? 9 : accelMax(Math.abs(sv)) * thr;
   else if (brk > 0.02) a = sv > 0.3 ? -(3 + 8 * brk) : -Math.min(3, 3 * brk) * (sv > -5 ? 1 : 0);
+  else if (admin.on && P.target > 1) a = clamp((P.target - sv) * 1.2 + res, -1.8, accelMax(Math.abs(sv)));   // dev-меню: круїз і в місті
   else a = Math.abs(sv) < 0.6 ? -sv * 4 : -Math.sign(sv) * 1.4;
   if (Math.abs(sv) > 0.6 || Math.abs(a) > 0.3) a -= res;
-  const lim = Math.min(VMAX, 35);
+  const lim = VMAX;
   sv = clamp(sv + a * dt, -5, lim); if (thr <= 0.02 && brk <= 0.02 && Math.abs(sv) < 0.15) sv = 0;
   P.aLong = a;
   c.sv = sv; P.v = Math.abs(sv);
@@ -4122,7 +4232,6 @@ function cityStep(P, inp, dt) {
   P.yaw += yr * dt; P.yaw = Math.atan2(Math.sin(P.yaw), Math.cos(P.yaw));
   P.steer = inp.steer; P.aLat = sv * yr; P.scrape = false;
   P.x += Math.sin(P.yaw) * sv * dt; P.z -= Math.cos(P.yaw) * sv * dt;
-  P.x = clamp(P.x, -(CITY_MAX * 30 + 66), CITY_MAX * 30 + 66); P.z = clamp(P.z, -(CITY_MAX * 30 + 66), cZ(CITY_MAX) + 119);
   // столкновения со зданиями
   const fx = Math.sin(P.yaw), fz = -Math.cos(P.yaw), r = PLAYER_DIM.wid / 2, d = Math.max(0, (PLAYER_DIM.len - PLAYER_DIM.wid) / 2);
   const safe = P.god || gs.safe > 0; if (gs.safe > 0) gs.safe -= dt;
@@ -4161,9 +4270,8 @@ function cityStep(P, inp, dt) {
   pumpHose.visible = false;
   if (gs.fueling) doFuel(P, dt);
   // кончилось топливо — эвакуатор на шоссе
-  if (empty && P.v < 0.3) { c.emptyT += dt; if (c.emptyT > 3) { c.emptyT = 0; gs.fuel = 0.08; if (game.mCity) { const pd = c.pads[0]; P.x = (pd.x0 + pd.x1) / 2; P.z = pd.z1 + 4; c.sv = 0; toast('🚚 Евакуатор доставив до АЗС'); } else { toast('🚚 Евакуатор відвіз на трасу'); returnToHighway(P); return; } } } else c.emptyT = 0;
+  if (empty && P.v < 0.3) { c.emptyT += dt; if (c.emptyT > 3) { c.emptyT = 0; gs.fuel = 0.08; if (game.mCity) { let pd = null, bd = 1e18; for (const q of c.pads) { const dd = ((q.x0 + q.x1) / 2 - P.x) ** 2 + ((q.z0 + q.z1) / 2 - P.z) ** 2; if (dd < bd) { bd = dd; pd = q; } } if (pd) { P.x = (pd.x0 + pd.x1) / 2; P.z = pd.z1 + 4; c.sv = 0; toast('🚚 Евакуатор доставив до АЗС'); } else toast('🚚 Евакуатор підвіз пального'); } else { toast('🚚 Евакуатор відвіз на трасу'); returnToHighway(P); return; } } } else c.emptyT = 0;
   cityAiStep(dt, P);
-  if (P.z > cZ(CITY_MAX) + 98) { if (game.mCity) { P.z = cZ(CITY_MAX) + 97; c.sv *= 0.5; } else returnToHighway(P); }
 }
 function cityCam(P, dt, V, k) {
   let dd = P.yaw - city.camYaw; dd = Math.atan2(Math.sin(dd), Math.cos(dd)); city.camYaw += dd * Math.min(1, dt * 4);
@@ -4210,12 +4318,12 @@ function vehIcon(v) {
       rider(35, 38, 38, 24) + '</svg>';
   }
   if (SC) {                                                                               // електросамокати
-    const a = hx(SC.acc);
-    return '<svg viewBox="0 0 64 64"><defs>' + bgd + grad('p', a) + '</defs><rect width="64" height="64" rx="10" fill="url(#' + U + 'bg)"/><ellipse cx="32" cy="51" rx="26" ry="2.6" fill="#000" opacity=".35"/>' +
+    const a = hx(SC.acc), dc = SC.kk ? '#6b6e74' : a;
+    return '<svg viewBox="0 0 64 64"><defs>' + bgd + grad('p', dc) + '</defs><rect width="64" height="64" rx="10" fill="url(#' + U + 'bg)"/><ellipse cx="32" cy="51" rx="26" ry="2.6" fill="#000" opacity=".35"/>' +
       wr(13, 43, 7) + wr(51, 43, 7) +
       '<path d="M13 43L8 43" stroke="#dfe5ff" stroke-width="0"/>' +
       '<rect x="12" y="39.5" width="34" height="4.4" rx="2.2" fill="url(#' + U + 'p)"/><rect x="18" y="43.5" width="22" height="3.4" rx="1.7" fill="#2a2d3a"/>' + (SC.dual ? '<rect x="22" y="46" width="14" height="2.6" rx="1.3" fill="' + a + '"/>' : '') +
-      '<path d="M51 43L46 12" stroke="#dfe5ff" stroke-width="3.2" stroke-linecap="round"/><path d="M40 11h11" stroke="#15161a" stroke-width="3.4" stroke-linecap="round"/>' +
+      '<path d="M51 43L46 12" stroke="' + (SC.kk ? '#17181b' : '#dfe5ff') + '" stroke-width="3.2" stroke-linecap="round"/>' + (SC.kk ? '<rect x="14" y="40" width="5" height="3.4" fill="' + a + '"/><rect x="38" y="40" width="5" height="3.4" fill="' + a + '"/><path d="M13 43L9 36" stroke="#54575d" stroke-width="2.6" stroke-linecap="round"/>' : '') + '<path d="M40 11h11" stroke="#15161a" stroke-width="3.4" stroke-linecap="round"/>' +
       '<rect x="43" y="7" width="6" height="3" rx="1" fill="' + a + '"/><path d="M8 33q5-5 10 0" stroke="' + a + '" stroke-width="0"/>' +
       '<path d="M5 33q5-6 11-1" stroke="' + a + '" stroke-width="2.4" fill="none" stroke-linecap="round" transform="translate(40 2)"/>' +
       rider(26, 40, 29, 26) + '</svg>';
@@ -4496,14 +4604,72 @@ function countOvertakes(P, list) {
 // ---------- режим «Втеча від поліції» ----------
 // Поки їдеш ≤130 км/год — звичайна гра. Швидше 130 — за тобою погоня. Швидше 180 — поліція відстає й губить тебе.
 const pol = { cars: [], heat: 0, cool: 0, bust: 0, chase: 0, nextId: 1 }, polMeshes = new Map(), POL_VMAX = 49.5;
-function policeReset() { pol.cars.length = 0; pol.heat = 0; pol.bust = 0; pol.chase = 0; pol.cool = 0; const h = $('polHud'); if (h) h.style.display = 'none'; }
+const arrest = { on: false, t: 0 };
+function arrestStart(P) {
+  P.alive = false; P.crashT = 0; P.wreckSpin = 0; arrest.on = true; arrest.t = 0; app.overMsg = '🚔 Заарештовано!';
+  const f = $('arrestFx'); if (f) f.classList.add('on');
+  try { navigator.vibrate && navigator.vibrate([200, 80, 200]); } catch (e) {}
+}
+function policeReset() { arrest.on = false; { const f = $('arrestFx'); if (f) f.classList.remove('on'); } pol.cars.length = 0; pol.heat = 0; pol.bust = 0; pol.chase = 0; pol.cool = 0; const h = $('polHud'); if (h) h.style.display = 'none'; }
 function polSpawn(P, gap) {
   const lim = halfRoad() - 1.6;
   pol.cars.push({ id: pol.nextId++, x: clamp(P.x + rnd(-3, 3), -lim, lim), z: P.z + gap, v: Math.max(P.v, 30), yaw: 0, len: 4.4, wid: 1.8 });
 }
+function polPick(c, P) {
+  const s = c.seg, back = (s.d + 2) % 4; let best = s.d, bd = 1e18;
+  for (let d = 0; d < 4; d++) { if (d === back) continue; const dd = Math.hypot(cX(s.ni + CDIR[d][0]) - P.x, cZ(s.nj + CDIR[d][1]) - P.z); if (dd < bd) { bd = dd; best = d; } }
+  return best;
+}
+function polCityMove(c, P, dt, want) {
+  if (c.seg.type === 'node' && c.seg.q) want = Math.min(want, 30);
+  else if (c.seg.type === 'line') { if (c.seg.len - c.s > 40) c.nextD = polPick(c, P); if (c.nextD !== c.seg.d && c.seg.len - c.s < 45) want = Math.min(want, 30); }
+  c.v += clamp(want - c.v, -14 * dt, 7 * dt);
+  c.s += c.v * dt;
+  for (let k = 0; k < 3 && c.s >= c.seg.len; k++) {
+    c.s -= c.seg.len;
+    if (c.seg.type === 'line') c.seg = citySeg(c.seg.ni, c.seg.nj, c.seg.d, c.nextD);
+    else { c.d = c.nextD; c.seg = cityLineSeg(c.seg.i, c.seg.j, c.d); c.nextD = polPick(c, P); }
+  }
+  cityEval(c); c.x = c.pos[0]; c.z = c.pos[1];
+}
+function polSpawnCity(P, dist) {
+  const ang = rnd(0, 6.283), tx = P.x + Math.cos(ang) * dist, tz = P.z + Math.sin(ang) * dist;
+  const i = Math.round(tx / CITY_PITCH) + CITY_CC, j = Math.round(tz / CITY_PITCH) + CITY_CC, d = Math.floor(rnd(0, 4));
+  const c = { id: pol.nextId++, city: true, x: 0, z: 0, v: Math.max(P.v * 0.6, 12), yaw: 0, len: 4.4, wid: 1.8, d, nextD: d, seg: citySeg(i, j, d, d), s: 0, pos: [0, 0] };
+  cityEval(c); c.x = c.pos[0]; c.z = c.pos[1]; c.yaw = c.yaw; pol.cars.push(c);
+}
+function policeCityStep(P, dt) {
+  const kmh = P.v * 3.6;
+  if (!pol.cars.length) {
+    pol.cool = Math.max(0, pol.cool - dt);
+    pol.heat = kmh > 130 && pol.cool <= 0 ? pol.heat + dt : Math.max(0, pol.heat - dt * 2);
+    if (pol.heat > 2) { pol.heat = 0; pol.chase = 0; pol.bust = 0; polSpawnCity(P, 170); toast('🚔 Поліція! Щоб відірватись — їдь швидше 180 км/год'); }
+    return;
+  }
+  pol.chase += dt;
+  if (pol.cars.length < 2 && pol.chase > 25) polSpawnCity(P, 190);
+  if (pol.cars.length < 3 && pol.chase > 55) polSpawnCity(P, 210);
+  let near = false;
+  for (let i = pol.cars.length - 1; i >= 0; i--) {
+    const c = pol.cars[i], gap = Math.hypot(c.x - P.x, c.z - P.z);
+    const want = gap > 14 ? Math.min(POL_VMAX, P.v * 1.05 + gap * 0.14 + 2) : Math.min(POL_VMAX, P.v);
+    polCityMove(c, P, dt, want);
+    if (gap < 9.5) near = true;
+    if (gap > 320) pol.cars.splice(i, 1);
+  }
+  if (!pol.cars.length) { toast('🚔 Ти відірвався від поліції! +100'); P.overtakes += 4; pol.cool = 12; pol.heat = 0; pol.bust = 0; return; }
+  pol.bust = near && !P.god ? pol.bust + dt : Math.max(0, pol.bust - dt * 1.5);
+  if (pol.bust > 2.6) { arrestStart(P); pol.bust = 0; }
+}
 function policeStep(P, dt) {
-  const on = game.mPolice && !city.on && !app.demo && P.alive && gs.mode === 'drive';
+  if (arrest.on) {
+    arrest.t += dt;
+    for (const c of pol.cars) { if (c.city) polCityMove(c, P, dt, 0); else { c.v = Math.max(0, c.v - 14 * dt); c.z -= c.v * dt; } }
+    return;
+  }
+  const on = game.mPolice && !app.demo && P.alive && gs.mode === 'drive';
   if (!on) { if (pol.cars.length || pol.heat) policeReset(); return; }
+  if (city.on) { policeCityStep(P, dt); return; }
   const kmh = P.v * 3.6;
   if (!pol.cars.length) {
     pol.cool = Math.max(0, pol.cool - dt);
@@ -4529,7 +4695,7 @@ function policeStep(P, dt) {
   }
   if (!pol.cars.length) { toast('🚔 Ти відірвався від поліції! +100'); P.overtakes += 4; pol.cool = 12; pol.heat = 0; pol.bust = 0; return; }
   pol.bust = near && !P.god ? pol.bust + dt : Math.max(0, pol.bust - dt * 1.5);
-  if (pol.bust > 2.6) { app.overMsg = '🚔 Затримано!'; crashPlayer(P, 4); pol.cars.length = 0; pol.bust = 0; }
+  if (pol.bust > 2.6) { arrestStart(P); pol.bust = 0; }
 }
 function makePoliceMesh() {
   const m = makeCarMesh(0xf4f6fa, { lite: true, model: 'lanos' });
@@ -4555,7 +4721,8 @@ function policeSync(dt) {
   for (const [id, m] of polMeshes) if (!pol.cars.some(c => c.id === id)) { scene.remove(m); polMeshes.delete(id); }
   const h = $('polHud'), P = app.P;
   if (!pol.cars.length || !P) { if (h && h.style.display !== 'none') h.style.display = 'none'; Snd.siren(0, app.time); return; }
-  const gap = Math.max(0, Math.round(Math.min(...pol.cars.map(c => c.z - P.z))));
+  const gap = Math.max(0, Math.round(Math.min(...pol.cars.map(c => c.city ? Math.hypot(c.x - P.x, c.z - P.z) : c.z - P.z))));
+  if (arrest.on) { h.style.display = 'none'; Snd.siren(0.3, app.time); return; }
   h.style.display = 'block';
   h.innerHTML = '<b>🚔 ПОГОНЯ</b> · ' + gap + ' м · ' + (P.v * 3.6 > 180 ? '✅ відриваєшся!' : 'їдь швидше 180 км/год') + (pol.bust > 0 ? '<div class="pbar"><i style="width:' + Math.min(100, pol.bust / 2.6 * 100) + '%"></i></div>' : '');
   Snd.siren(1 / (1 + gap / 70), app.time);
@@ -4563,6 +4730,7 @@ function policeSync(dt) {
 
 function showGameOver() {
   const P = app.P, score = scoreOf(P);
+  { const f = $('arrestFx'); if (f) f.classList.remove('on'); }
   if (score > best) { best = score; try { localStorage.setItem(BEST_KEY, String(best)); } catch (e) {} }
   el.overStats.innerHTML = (app.overMsg || '💥 Аварія!') + '<br>Рахунок: ' + score + ' · обгонів: ' + P.overtakes + (wl.total > 0 ? '<br>Віллі: ' + Math.round(wl.total) + ' м' : '') + '<br>Рекорд: ' + best;
   openMenu();
@@ -4575,6 +4743,7 @@ function step(dt) {
   if (app.demo) { inp.steer = 0; inp.throttle = 0; inp.brake = 0; }
   P.target = cfg.targetKmh / 3.6;
   P.god = admin.god || gs.mode !== 'drive' || gs.safe > 0;
+  if (arrest.on) { inp.throttle = 0; inp.brake = 1; inp.steer = 0; }
 
   if (Net.role !== 'client' && !city.on) {
     const pls = allPlayers();
@@ -4588,8 +4757,8 @@ function step(dt) {
   const list = vehiclesNow();
   if (!app.demo) {
     if (!city.on) { collide(P, list); countOvertakes(P, list); }
-    if (wasAlive && !P.alive) { Snd.burst(0.9, 900, 0.9); try { navigator.vibrate && navigator.vibrate([120, 60, 200]); } catch (e) {} el.flash.style.opacity = 1; setTimeout(() => { el.flash.style.opacity = 0; }, 350); }
-    if (!P.alive && !app.crashShown && P.crashT > 1.3) { app.crashShown = true; showGameOver(); }
+    if (wasAlive && !P.alive && !arrest.on) { Snd.burst(0.9, 900, 0.9); try { navigator.vibrate && navigator.vibrate([120, 60, 200]); } catch (e) {} el.flash.style.opacity = 1; setTimeout(() => { el.flash.style.opacity = 0; }, 350); }
+    if (!P.alive && !app.crashShown && P.crashT > (arrest.on ? 2.8 : 1.3)) { app.crashShown = true; showGameOver(); }
     if (vr.on && !P.alive && P.crashT > 3) respawn();
   }
 
